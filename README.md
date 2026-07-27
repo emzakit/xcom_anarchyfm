@@ -46,7 +46,7 @@ So, I spent time putting my lockdown Python skills to use and eventually got to 
 
 Then Google Gemini and Claude came along, which suggested a completely different approach: have the game
 just *announce* what it's doing to a log, and let a small external app do the
-actual playing. Suddenly the thing that had been stuck for years was **doable**! It's not perfect, but it works. That's good enough.
+actual playing instead of my initial approach which was to use DLL injection (nightmare). It's not perfect, but it works. That's good enough.
 
 I'm making this open source because everything should be (especially if AI helped out) and also in case one of you XCOM gurus figures out a way to make it work within the Unreal Engine itself and doesn't require an external Python audio player. That's the real dream, but I couldn't quite pull it off. Maybe one of you will.
 
