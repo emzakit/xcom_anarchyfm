@@ -15,15 +15,14 @@ when the game changes screens, and plays the right tracks from folders on your
 PC while the game's own music gets muted (through MMS). That's the whole trick.
 
 ## Links
-[Grab the latest release](https://github.com/emzakit/xcom_anarchyfm/releases)
-[Subscribe to the Anarchy FM Steam mod (required)](https://steamcommunity.com/sharedfiles/filedetails/?id=3772839338)
-[Music Modding System](https://steamcommunity.com/workshop/filedetails/?id=757398474)
-[Alternative Mod Launcher](https://github.com/X2CommunityCore/xcom2-launcher)
+- [Grab the latest release](https://github.com/emzakit/xcom_anarchyfm/releases)
+- [Subscribe to the Anarchy FM Steam mod (required)](https://steamcommunity.com/sharedfiles/filedetails/?id=3772839338)
+- [Music Modding System](https://steamcommunity.com/workshop/filedetails/?id=757398474)
+- [Alternative Mod Launcher](https://github.com/X2CommunityCore/xcom2-launcher)
 
-[How to use the music folders](https://github.com/emzakit/xcom_anarchyfm/blob/main/music/README.md)
-[How to setup Spotify](https://github.com/emzakit/xcom_anarchyfm/blob/main/SPOTIFY_SETUP.md)
-
-[How to build the executable yourself](https://github.com/emzakit/xcom_anarchyfm/blob/main/BUILDING.md)
+- [How to use the music folders](https://github.com/emzakit/xcom_anarchyfm/blob/main/music/README.md)
+- [How to setup Spotify](https://github.com/emzakit/xcom_anarchyfm/blob/main/SPOTIFY_SETUP.md)
+- [How to build the executable yourself](https://github.com/emzakit/xcom_anarchyfm/blob/main/BUILDING.md)
 
 ---
 
