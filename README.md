@@ -81,8 +81,6 @@ Recommended: [Alternative Mod Launcher](https://github.com/X2CommunityCore/xcom2
 
 ## Getting it running
 
-The easy way:
-
 Go to the release page, grab the zip file, unzip it somewhere and launch the .exe:
 https://github.com/emzakit/xcom_anarchyfm/releases
 
