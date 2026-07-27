@@ -1,0 +1,43 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# --- Virtual environment ---
+venv/
+.venv/
+env/
+
+# --- Personal / machine-specific config (generated on first run) ---
+# Contains local paths to your game, music, and log files — and, if you use
+# the experimental Spotify feature, your Spotify API credentials.
+xipod_config.json
+
+# Spotify OAuth token cache — access/refresh tokens for YOUR account.
+.spotify_cache.json
+
+# --- User music library + runtime logs ---
+# Ship the empty STATE_ folder structure (via .gitkeep) but never the
+# audio itself or the per-session logs.
+*.mp3
+*.wav
+*.ogg
+*.flac
+*.m4a
+music/_logs/
+*.log
+
+# --- PyInstaller build output ---
+build/
+dist/
+
+# --- Editor / tool state ---
+.claude/
+.vscode/
+.idea/
+
+# --- OS cruft ---
+Thumbs.db
+desktop.ini
+.DS_Store

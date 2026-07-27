@@ -1,0 +1,11 @@
+# XiPod runtime dependencies (Python 3.13)
+# audioop-lts is required by pydub on Python 3.13+ (audioop was removed
+# from the standard library).
+numpy==2.4.2
+pydub==0.25.1
+audioop-lts==0.2.2
+PyAudio==0.2.14
+pedalboard==0.9.22
+# PySide6 pulls in PySide6-Essentials and PySide6-Addons; the latter provides
+# QtWebEngine, used by the experimental in-app Web Player.
+PySide6==6.11.0
