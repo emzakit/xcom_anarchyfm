@@ -38,6 +38,8 @@ Everything else is a fun bonus that's still finding its feet.
 
 [How to build the executable yourself](https://github.com/emzakit/xcom_anarchyfm/blob/main/BUILDING.md)
 
+<img src="img_main_menu.png" alt="Main menu panel">
+
 ## Things to watch out for
 
 The tactical side (combat, explore, geoscape, the victory/defeat stingers,
