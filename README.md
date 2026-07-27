@@ -228,27 +228,6 @@ you'd rather have buttons, the in-game mod also ships `XiPodPlay` / `XiPodPause`
 
 ---
 
-## Web Player (experimental — Avenger only)
-
-A fun little extra: a **browser baked right into Anarchy Radio FM** so you can stream music
-without alt-tabbing while you mooch around the base. The **Web Player** button
-only lights up **on the Avenger** — it's a downtime toy, and it's **experimental**,
-so enjoy it as a bonus rather than leaning on it.
-
-- **YouTube / YouTube Music work great** — log in and it remembers you next time.
-- Type a web address, or just bash in a band name and it'll search YouTube for
-  you.
-- Want Spotify per state instead? That's its own feature — see the next section.
-- It's deliberately *not* tied into the state engine — it plays whatever you tell
-  it and mixes over the game like any other app. If you only want to DJ from
-  here, just leave the `STATE_*` folders empty.
-
-Runs on QtWebEngine, which rides along with `PySide6-Addons` (already in
-`requirements.txt`). If it's somehow missing, the button will tell you how to
-grab it.
-
----
-
 ## Spotify per state (experimental — your keys, your risk)
 
 <img src="img_spotify.png" alt="Spotify panel" width="520">
@@ -275,6 +254,29 @@ mix and match — Spotify for the base, local tracks for combat, whatever you fa
 The full walkthrough (making the app, grabbing the keys, linking your account) is
 in **[`SPOTIFY_SETUP.md`](SPOTIFY_SETUP.md)**, and there's a **Spotify** button
 in Anarchy Radio FM that opens it all up.
+
+---
+
+## Web Player (experimental — Avenger only)
+
+<img src="img_youtube.png" alt="YouTube panel" width="520">
+
+A fun little extra: a **browser baked right into Anarchy Radio FM** so you can stream music
+without alt-tabbing while you mooch around the base. The **Web Player** button
+only lights up **on the Avenger** — it's a downtime toy, and it's **experimental**,
+so enjoy it as a bonus rather than leaning on it.
+
+- **YouTube / YouTube Music work great** — log in and it remembers you next time.
+- Type a web address, or just bash in a band name and it'll search YouTube for
+  you.
+- Want Spotify per state instead? That's its own feature — see the next section.
+- It's deliberately *not* tied into the state engine — it plays whatever you tell
+  it and mixes over the game like any other app. If you only want to DJ from
+  here, just leave the `STATE_*` folders empty.
+
+Runs on QtWebEngine, which rides along with `PySide6-Addons` (already in
+`requirements.txt`). If it's somehow missing, the button will tell you how to
+grab it.
 
 ---
 
