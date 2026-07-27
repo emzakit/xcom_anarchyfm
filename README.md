@@ -69,15 +69,13 @@ take the game down with it. Worst case, Anarchy Radio FM shrugs and skips that o
 
 ## What you'll need
 
-- **XCOM 2: War of the Chosen** (Windows).
+- **XCOM 2 or XCOM 2 War of the Chosen** - only tested on Windows version.
 - **[Music Modding System (MMS)](https://steamcommunity.com/workshop/filedetails/?id=757398474)** — the
   in-game music framework. Required, and enabled in your mod list.
-- **The Anarchy Radio FM in-game mod** — the companion Workshop item that tells the app what
-  the game's up to. *(Add your Workshop link here.)*
-- **Python 3.10+** (built on 3.13), on Windows.
-- **[ffmpeg](https://ffmpeg.org/)** on your PATH — only needed for `.mp3` and
-  `.ogg`. Plain `.wav` plays without it, so if you're a WAV purist you can skip
-  this entirely.
+- **[The Anarchy Radio FM in-game mod](https://steamcommunity.com/sharedfiles/filedetails/?id=3772839338)** — the companion Workshop item that tells the app what
+  the game's up to.*
+
+Recommended: [Alternative Mod Launcher](https://github.com/X2CommunityCore/xcom2-launcher)
 
 ---
 
@@ -88,7 +86,16 @@ The easy way:
 Go to the release page, grab the zip file, unzip it somewhere and launch the .exe:
 https://github.com/emzakit/xcom_anarchyfm/releases
 
-The second (lazy) way is **`launch.bat`**:
+### I want more control!
+
+First off, you will need:
+
+- **Python 3.10+** (built on 3.13).
+- **[ffmpeg](https://ffmpeg.org/)** on your PATH — only needed for `.mp3` and
+  `.ogg`. Plain `.wav` plays without it, so if you're a WAV purist you can skip
+  this entirely. [How do I add to PATH?](https://www.wikihow.com/Install-FFmpeg-on-Windows) - though if you're asking this then maybe the [release version](https://github.com/emzakit/xcom_anarchyfm/releases) is the way to go.
+
+I've provided a lazy way via the **`launch.bat`**:
 
 1. Install [Python](https://www.python.org/downloads/) — and *do* tick **"Add
    Python to PATH"** on the first screen, it saves a headache.
@@ -101,7 +108,7 @@ git clone https://github.com/emzakit/xcom_anarchyfm.git
 First time through, `launch.bat` quietly sets up a virtual environment, installs
 what it needs, and opens Anarchy Radio FM. After that it just launches straight away.
 
-If you'd rather drive stick:
+If you'd rather do it yourself:
 
 ```bash
 python -m venv venv
