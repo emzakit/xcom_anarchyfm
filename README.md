@@ -74,6 +74,10 @@ There are two halves, and they gossip through a log file:
 Nice side effect of doing the audio in a separate process: a dodgy file can't
 take the game down with it. Worst case, Anarchy Radio FM shrugs and skips that one track.
 
+The default folder to place music in is: `STATE_RESISTANCE_RADIO/`. If you want to use other folders go into Effects and turn off Radio Source.
+
+<img src="img_effects.png" alt="Effects panel">
+
 ---
 
 ## What you'll need
@@ -164,7 +168,7 @@ Drop audio files into whichever state folder you want to score:
 | `STATE_MISSION_COMBAT/` | Tactical: it's kicking off |
 | `STATE_VICTORY/` | Post-mission victory sting |
 | `STATE_DEFEAT/` | Post-mission "well, that went badly" sting |
-| `STATE_RESISTANCE_RADIO/` | Shared "radio" pool (random-start — the fun one) |
+| `STATE_RESISTANCE_RADIO/` | DEFAULT FOLDER <-- Shared "radio" pool (random-start — the fun one) |
 
 Every state also has a `_LOOP` twin (`STATE_AVENGER_LOOP/`, etc.) for tracks you
 want to loop rather than shuffle through. Leave a folder empty and Anarchy Radio FM just
@@ -244,6 +248,8 @@ grab it.
 ---
 
 ## Spotify per state (experimental — your keys, your risk)
+
+<img src="img_spotify.png" alt="Spotify panel">
 
 Here's a spicy one: pin a **Spotify playlist to each game state** — a combat
 playlist for combat, something mellow for the Avenger, and so on. It's
