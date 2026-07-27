@@ -1,4 +1,4 @@
-"""Anarchy Radio FM Console — Shen-flavored terminal output with ANSI green styling.
+"""Anarchy Radio FM Console — Shen-flavored terminal output with ANSI cyan styling.
 
 Also writes timestamped logs to _logs/ inside the music folder for debugging.
 Call init_file_log(music_folder) once at startup to enable file logging.
@@ -11,7 +11,7 @@ import threading
 from datetime import datetime
 
 # ------------------------------------------------------------------ #
-#  ANSI Escape Codes (green terminal theme)
+#  ANSI Escape Codes (cyan terminal theme, matching gui/theme.py)
 # ------------------------------------------------------------------ #
 
 # When the GUI is launched with pythonw.exe there is NO console, so
@@ -44,18 +44,18 @@ for _stream in (sys.stdout, sys.stderr):
 RESET  = "\033[0m"
 BOLD   = "\033[1m"
 DIM    = "\033[2m"
-GREEN  = "\033[32m"
-BRIGHT = "\033[92m"
-CYAN   = "\033[96m"
-YELLOW = "\033[93m"
+CYAN   = "\033[36m"
+BRIGHT = "\033[96m"   # bright cyan
+AMBER  = "\033[93m"   # bright yellow — the closest ANSI gets to the UI gold
 GRAY   = "\033[90m"
 
-# Composite styles
+# Composite styles — mapped to the same roles as the GUI palette in
+# gui/theme.py, so the terminal and the comms log read the same way.
 SHEN    = f"{BRIGHT}"          # Main text
 HEADER  = f"{BOLD}{BRIGHT}"    # Section headers
-TRACK   = f"{BOLD}{CYAN}"      # Track names
-SIGNAL  = f"{YELLOW}"          # Incoming signals
-SUBTLE  = f"{GREEN}"           # Debug/dim info
+TRACK   = f"{BOLD}{BRIGHT}"    # Track names
+SIGNAL  = f"{AMBER}"           # Incoming signals
+SUBTLE  = f"{CYAN}"            # Debug/dim info
 FAINT   = f"{GRAY}"            # Very low priority
 
 
@@ -154,12 +154,12 @@ def debug(msg):
 
 def warn(msg):
     """Warning message."""
-    print(f"{YELLOW}  SHEN: {msg}{RESET}")
+    print(f"{AMBER}  SHEN: {msg}{RESET}")
     _file_write(f"WARN: {msg}")
 
 def error(msg):
     """Error message."""
-    print(f"{BOLD}{YELLOW}  SHEN: {msg}{RESET}")
+    print(f"{BOLD}{AMBER}  SHEN: {msg}{RESET}")
     _file_write(f"ERROR: {msg}")
 
 def faint(msg):
@@ -169,7 +169,7 @@ def faint(msg):
 
 def divider():
     """Horizontal rule."""
-    print(f"{GREEN}  {'─' * 52}{RESET}")
+    print(f"{CYAN}  {'─' * 52}{RESET}")
 
 
 # ------------------------------------------------------------------ #
@@ -180,6 +180,6 @@ def show_boot_art():
     """Print a simple plaintext title banner (CLI / terminal mode)."""
     print()
     print(f"{HEADER}  ANARCHY RADIO FM{RESET}")
-    print(f"{GREEN}  {'─' * 40}{RESET}")
+    print(f"{CYAN}  {'─' * 40}{RESET}")
     print(f"{FAINT}  Local & Spotify soundtracks for XCOM 2{RESET}")
     print()

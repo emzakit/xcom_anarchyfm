@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 
-from gui.theme import FONT_FAMILY, GREEN, GREEN_DIM
+from gui.theme import FONT_FAMILY, PRIMARY, PRIMARY_DIM
 from gui.helpers import make_divider
 from settings import get_preset_lists
 
@@ -91,7 +91,7 @@ class EffectsDialog(QWidget):
 
         title = QLabel("AUDIO EFFECTS")
         title.setFont(QFont(FONT_FAMILY, 14, QFont.Bold))
-        title.setStyleSheet(f"color: {GREEN};")
+        title.setStyleSheet(f"color: {PRIMARY};")
         root.addWidget(title)
         root.addWidget(make_divider())
 
@@ -105,7 +105,7 @@ class EffectsDialog(QWidget):
             "Global FX sliders apply when a state's preset is set to 'Custom'."
         )
         info.setFont(QFont(FONT_FAMILY, 10))
-        info.setStyleSheet(f"color: {GREEN_DIM};")
+        info.setStyleSheet(f"color: {PRIMARY_DIM};")
         info.setWordWrap(True)
         root.addWidget(info)
 
@@ -243,7 +243,7 @@ class EffectsDialog(QWidget):
             "is set to 'Custom'. Named presets override these values."
         )
         note.setFont(QFont(FONT_FAMILY, 10))
-        note.setStyleSheet(f"color: {GREEN_DIM};")
+        note.setStyleSheet(f"color: {PRIMARY_DIM};")
         note.setWordWrap(True)
         layout.addWidget(note)
         layout.addSpacing(4)

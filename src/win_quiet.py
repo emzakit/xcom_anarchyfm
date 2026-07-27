@@ -1,14 +1,16 @@
 """Stop child processes from flashing a console window on Windows.
 
-pydub decodes mp3/ogg by spawning ffmpeg/ffprobe through subprocess.Popen
-with no "no window" flag. When Anarchy Radio FM runs windowless (pythonw.exe,
-no console of its own), every ffmpeg launch pops a brief blank console window
+When Anarchy Radio FM runs windowless (pythonw.exe, no console of its own),
+a child process spawned without a "no window" flag pops a brief blank console
 and grabs foreground focus — which, in a fullscreen game, throws you to the
-desktop each time a new music state loads a track.
+desktop.
 
-Patching subprocess.Popen to always add CREATE_NO_WINDOW fixes it for every
-child we spawn (ffmpeg, tasklist, explorer, the game launcher). All of those
-are GUI or piped-stdio processes, so suppressing their console is harmless.
+Track decoding used to be the worst offender: pydub shelled out to
+ffmpeg/ffprobe for every single track, so each music-state change flashed a
+console. That path is gone — decode.py now decodes in-process via PyAV — but
+we still spawn tasklist, explorer and the game launcher. Patching
+subprocess.Popen to always add CREATE_NO_WINDOW covers all of them; they're
+GUI or piped-stdio processes, so suppressing the console is harmless.
 """
 
 import subprocess

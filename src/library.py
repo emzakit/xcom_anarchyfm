@@ -25,6 +25,26 @@ STINGER_STATES = ["state_victory", "state_defeat"]
 # tracks play from here instead of the state's own folder.
 RADIO_STATE = "state_resistance_radio"
 
+# The only state the Radio Mode button applies to. Resistance-radio content
+# is long-form downtime atmosphere — DJ banter, fake adverts, hour-long
+# mixes. That works on the ship and nowhere else: on the shell menu it
+# fights the game's own music, and mid-firefight a DJ telling jokes kills
+# the tension outright.
+RADIO_MODE_STATE = "state_avenger"
+
+# Which folder(s) Radio Mode draws from.
+RADIO_SOURCE_RADIO = "radio"       # STATE_RESISTANCE_RADIO only
+RADIO_SOURCE_STATE = "state"       # STATE_AVENGER only
+RADIO_SOURCE_BOTH = "both"         # both pooled together
+RADIO_SOURCES = (RADIO_SOURCE_RADIO, RADIO_SOURCE_STATE, RADIO_SOURCE_BOTH)
+
+# File types the scanner will pick up. Every one of these is decoded by
+# src/decode.py (PyAV), so this list is about what we advertise rather than
+# what's technically possible — PyAV will read plenty more. It used to be
+# just mp3/wav/ogg, back when decoding meant shelling out to a user-installed
+# ffmpeg. Keep it in sync with the table in music/music_readme.md.
+AUDIO_EXTENSIONS = (".mp3", ".wav", ".ogg", ".flac", ".m4a", ".opus", ".wma")
+
 # Everything the scanner recognises as a valid folder
 ALL_KNOWN = set(BASE_STATES) | LOOP_STATES | set(STINGER_STATES) | {RADIO_STATE}
 
@@ -35,7 +55,7 @@ def _scan_audio_files(folder):
     if not os.path.isdir(folder):
         return tracks
     for file in sorted(os.listdir(folder)):
-        if file.lower().endswith((".mp3", ".wav", ".ogg")):
+        if file.lower().endswith(AUDIO_EXTENSIONS):
             tracks.append({"name": file, "path": os.path.join(folder, file)})
     return tracks
 
@@ -127,6 +147,35 @@ class MusicLibrary:
             # _LOOP empty → fall through to regular folder
 
         return self.library.get(top, [])
+
+    def resolve_radio_playlist(self, top, source):
+        """Track list for the Radio Mode button (Avenger only).
+
+        The state's _LOOP folder (STATE_AVENGER_LOOP) is deliberately NOT
+        consulted here. Radio Mode overrides it: when the button is on, the
+        Avenger plays the station, not the loop track, regardless of what the
+        Loop Track checkbox in Effects says. XiPodEngine._should_loop refuses
+        to repeat for the same reason.
+
+        `source` decides where the tracks come from:
+          "radio" — STATE_RESISTANCE_RADIO only. Falls back to the state's
+                    own folder if the radio folder is empty, so switching
+                    Radio Mode on before you've filled it isn't silence.
+          "state" — the state's own folder only. No fallback: you asked for
+                    this folder specifically, and an empty one means the
+                    game's own music takes over, same as it would normally.
+          "both"  — both folders pooled. The engine shuffles the combined
+                    list, so a finished track can be followed by one from
+                    either folder.
+        """
+        radio_tracks = self.library.get(RADIO_STATE, [])
+        own_tracks = self.library.get(top, [])
+
+        if source == RADIO_SOURCE_STATE:
+            return own_tracks
+        if source == RADIO_SOURCE_BOTH:
+            return radio_tracks + own_tracks
+        return radio_tracks or own_tracks
 
     def export_ini(self, log_path, settings_lines):
         """Write XComXiPod.ini with settings + track manifest."""

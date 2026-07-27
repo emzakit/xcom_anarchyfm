@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 
-from gui.theme import FONT_FAMILY, GREEN, GREEN_DIM, GREEN_FAINT, AMBER, BORDER
+from gui.theme import FONT_FAMILY, PRIMARY, PRIMARY_DIM, PRIMARY_FAINT, AMBER, BORDER
 from gui.helpers import make_divider, path_row
 from setup import save_config, import_workshop_mods, _create_state_folders, _find_game_config_folder
 from setup import find_log_path_silent
@@ -33,7 +33,7 @@ class OptionsDialog(QWidget):
 
         title = QLabel("OPTIONS")
         title.setFont(QFont(FONT_FAMILY, 14, QFont.Bold))
-        title.setStyleSheet(f"color: {GREEN};")
+        title.setStyleSheet(f"color: {PRIMARY};")
         root.addWidget(title)
         root.addWidget(make_divider())
         root.addSpacing(8)
@@ -86,7 +86,7 @@ class OptionsDialog(QWidget):
         save_btn.setCursor(Qt.PointingHandCursor)
         save_btn.setFixedWidth(100)
         save_btn.setStyleSheet(
-            f"background-color: {GREEN_FAINT}; border: 1px solid {GREEN_DIM}; "
+            f"background-color: {PRIMARY_FAINT}; border: 1px solid {PRIMARY_DIM}; "
             f"font-weight: bold; padding: 8px;"
         )
         save_btn.clicked.connect(self._on_save)

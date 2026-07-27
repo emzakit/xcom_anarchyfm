@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 
-from gui.theme import FONT_FAMILY, GREEN, GREEN_DIM, GREEN_FAINT, AMBER, CYAN
+from gui.theme import FONT_FAMILY, PRIMARY, PRIMARY_DIM, PRIMARY_FAINT, AMBER, ACCENT
 from gui.helpers import make_divider
 from spotify import BINDABLE_STATES, DEFAULT_REDIRECT, parse_context_uri
 import console
@@ -50,7 +50,7 @@ class SpotifyDialog(QWidget):
 
         title = QLabel("SPOTIFY  ·  EXPERIMENTAL")
         title.setFont(QFont(FONT_FAMILY, 14, QFont.Bold))
-        title.setStyleSheet(f"color: {GREEN};")
+        title.setStyleSheet(f"color: {PRIMARY};")
         root.addWidget(title)
 
         warn = QLabel(
@@ -126,13 +126,13 @@ class SpotifyDialog(QWidget):
         self.link_btn = QPushButton("Link Spotify Account")
         self.link_btn.setCursor(Qt.PointingHandCursor)
         self.link_btn.setStyleSheet(
-            f"background-color: {GREEN_FAINT}; border: 1px solid {GREEN_DIM}; "
+            f"background-color: {PRIMARY_FAINT}; border: 1px solid {PRIMARY_DIM}; "
             f"font-weight: bold; padding: 6px;"
         )
         self.link_btn.clicked.connect(self._on_link)
         link_row.addWidget(self.link_btn)
         self.link_status = QLabel(self._status_text())
-        self.link_status.setStyleSheet(f"color: {CYAN}; font-size: 11px;")
+        self.link_status.setStyleSheet(f"color: {ACCENT}; font-size: 11px;")
         link_row.addWidget(self.link_status, 1)
         cg.addLayout(link_row, 3, 0, 1, 2)
         lay.addWidget(creds)
@@ -162,7 +162,7 @@ class SpotifyDialog(QWidget):
         save_btn.setCursor(Qt.PointingHandCursor)
         save_btn.setFixedWidth(100)
         save_btn.setStyleSheet(
-            f"background-color: {GREEN_FAINT}; border: 1px solid {GREEN_DIM}; "
+            f"background-color: {PRIMARY_FAINT}; border: 1px solid {PRIMARY_DIM}; "
             f"font-weight: bold; padding: 8px;"
         )
         save_btn.clicked.connect(self._on_save)

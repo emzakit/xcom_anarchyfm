@@ -1,4 +1,4 @@
-"""Anarchy Radio FM GUI package — PySide6 green retro terminal-style control panel.
+"""Anarchy Radio FM GUI package — PySide6 Avenger-style control panel.
 
 All imports happen inside run_gui() on purpose: submodules of this package
 (gui.theme, etc.) are imported by non-GUI modules like setup_gui, and
@@ -13,7 +13,7 @@ def run_gui():
     import sys
 
     from PySide6.QtWidgets import QApplication
-    from PySide6.QtCore import QTimer, Qt
+    from PySide6.QtCore import QTimer
 
     from setup import config_exists, load_config
     from setup_gui import run_setup_gui
@@ -43,12 +43,6 @@ def run_gui():
     # first run.
     app = QApplication.instance()
     if app is None:
-        # The Web Player uses QtWebEngine, which needs shared GL contexts —
-        # the attribute must be set before the QApplication is created.
-        try:
-            QApplication.setAttribute(Qt.AA_ShareOpenGLContexts, True)
-        except Exception:
-            pass
         app = QApplication(sys.argv)
 
     window = XiPodWindow(cfg)

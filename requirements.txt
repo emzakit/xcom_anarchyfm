@@ -6,6 +6,11 @@ pydub==0.25.1
 audioop-lts==0.2.2
 PyAudio==0.2.14
 pedalboard==0.9.22
-# PySide6 pulls in PySide6-Essentials and PySide6-Addons; the latter provides
-# QtWebEngine, used by the experimental in-app Web Player.
-PySide6==6.11.0
+# PyAV bundles ffmpeg's libraries in the wheel, so users don't need ffmpeg on
+# their PATH for .mp3/.ogg/etc. All file loading goes through src/decode.py;
+# pydub is still used for slicing, crossfades and the FX chain.
+av==18.0.0
+# Essentials only — NOT the full PySide6 meta-package. PySide6-Addons is what
+# drags in QtWebEngine (~360 MB of Chromium), and nothing in this app needs a
+# browser engine.
+PySide6-Essentials==6.11.0

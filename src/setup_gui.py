@@ -1,4 +1,4 @@
-"""Anarchy Radio FM Setup GUI — green retro terminal-inspired config wizard."""
+"""Anarchy Radio FM Setup GUI — Avenger-style config wizard."""
 
 import os
 import sys
@@ -18,7 +18,7 @@ from setup import (
     find_log_path_silent, import_workshop_mods,
 )
 # Shared look & feel — one stylesheet for the whole app (see gui/theme.py).
-from gui.theme import STYLESHEET, FONT_FAMILY, GREEN, GREEN_DIM, AMBER
+from gui.theme import STYLESHEET, FONT_FAMILY, PRIMARY, PRIMARY_DIM, AMBER
 
 
 # ------------------------------------------------------------------ #
@@ -26,7 +26,7 @@ from gui.theme import STYLESHEET, FONT_FAMILY, GREEN, GREEN_DIM, AMBER
 # ------------------------------------------------------------------ #
 from paths import resource_path
 
-_BANNER_PATH = resource_path("AnarchyFM.png")
+_BANNER_PATH = resource_path("assets", "banner.png")
 
 # Fallback text if the banner image is missing
 _FALLBACK_TITLE = "ANARCHY RADIO FM"
@@ -59,14 +59,14 @@ class SetupWindow(QWidget):
         else:
             art_label.setText(_FALLBACK_TITLE)
             art_label.setFont(QFont(FONT_FAMILY, 20, QFont.Bold))
-            art_label.setStyleSheet(f"color: {GREEN}; background: transparent;")
+            art_label.setStyleSheet(f"color: {PRIMARY}; background: transparent;")
         root.addWidget(art_label)
         root.addSpacing(6)
 
         # --- Title ---
         title = QLabel("SHEN:  First time? Let me get you configured, Commander.")
         title.setFont(QFont(FONT_FAMILY, 12, QFont.Bold))
-        title.setStyleSheet(f"color: {GREEN};")
+        title.setStyleSheet(f"color: {PRIMARY};")
         title.setAlignment(Qt.AlignCenter)
         root.addWidget(title)
         root.addSpacing(14)
@@ -156,12 +156,12 @@ class SetupWindow(QWidget):
 
         lbl_title = QLabel(title_text)
         lbl_title.setFont(QFont(FONT_FAMILY, 12, QFont.Bold))
-        lbl_title.setStyleSheet(f"color: {GREEN};")
+        lbl_title.setStyleSheet(f"color: {PRIMARY};")
         lay.addWidget(lbl_title)
 
         lbl_desc = QLabel(desc_text)
         lbl_desc.setFont(QFont(FONT_FAMILY, 10))
-        lbl_desc.setStyleSheet(f"color: {GREEN_DIM};")
+        lbl_desc.setStyleSheet(f"color: {PRIMARY_DIM};")
         lbl_desc.setWordWrap(True)
         lay.addWidget(lbl_desc)
 
@@ -372,12 +372,6 @@ def run_setup_gui(existing_cfg=None):
     app = QApplication.instance()
     own_app = False
     if app is None:
-        # Set before the QApplication exists so the Web Player's QtWebEngine
-        # view (created later in the main window) has shared GL contexts.
-        try:
-            QApplication.setAttribute(Qt.AA_ShareOpenGLContexts, True)
-        except Exception:
-            pass
         app = QApplication(sys.argv)
         own_app = True
 

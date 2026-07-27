@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="AnarchyFM.png" alt="Anarchy Radio FM" width="520">
+  <img src="assets/AnarchyFM.png" alt="Anarchy Radio FM" width="520">
 </p>
 
 # Anarchy Radio FM
@@ -8,8 +8,8 @@
 
 https://steamcommunity.com/sharedfiles/filedetails/?id=3772839338
 
-Anarchy Radio FM is a little desktop app that plays your own `.mp3` / `.ogg` / `.wav` files
-in sync with the game — title music on the menu, chill tunes on the Avenger,
+Anarchy Radio FM is a little desktop app that plays your own `.mp3` / `.ogg` /
+`.wav` / `.flac` / `.m4a` / `.opus` files in sync with the game — title music on the menu, chill tunes on the Avenger,
 something loud when the shooting starts. It quietly watches XCOM 2's log, notices
 when the game changes screens, and plays the right tracks from folders on your
 PC while the game's own music gets muted (through MMS). That's the whole trick.
@@ -32,13 +32,13 @@ Everything else is a fun bonus that's still finding its feet.
 
 [Alternative Mod Launcher](https://github.com/X2CommunityCore/xcom2-launcher)
 
-[How to use the music folders](https://github.com/emzakit/xcom_anarchyfm/blob/main/music/README.md)
+[How to use the music folders](https://github.com/emzakit/xcom_anarchyfm/blob/main/music/music_readme.md)
 
 [How to setup Spotify](https://github.com/emzakit/xcom_anarchyfm/blob/main/SPOTIFY_SETUP.md)
 
 [How to build the executable yourself](https://github.com/emzakit/xcom_anarchyfm/blob/main/BUILDING.md)
 
-<img src="img_main_menu.png" alt="Main menu panel" width="520">
+<img src="assets/img_main_menu.png" alt="Main menu panel" width="520">
 
 ## Things to watch out for
 
@@ -76,9 +76,12 @@ There are two halves, and they gossip through a log file:
 Nice side effect of doing the audio in a separate process: a dodgy file can't
 take the game down with it. Worst case, Anarchy Radio FM shrugs and skips that one track.
 
-The default folder to place music in is: `STATE_RESISTANCE_RADIO/`. If you want to use other folders go into Effects and turn off Radio Source.
+There are two ways to organise your music, and you can mix them: drop tracks
+into the **per-state folders** (`STATE_AVENGER/`, `STATE_GEOSCAPE/`, …) so each
+screen gets its own music, or put everything in **`STATE_RESISTANCE_RADIO/`**
+and run it as one station with the **Radio Mode** button. More on that below.
 
-<img src="img_effects.png" alt="Effects panel" width="520">
+<img src="assets/img_effects.png" alt="Effects panel" width="520">
 
 ---
 
@@ -104,9 +107,10 @@ https://github.com/emzakit/xcom_anarchyfm/releases
 First off, you will need:
 
 - **Python 3.10+** (built on 3.13).
-- **[ffmpeg](https://ffmpeg.org/)** on your PATH — only needed for `.mp3` and
-  `.ogg`. Plain `.wav` plays without it, so if you're a WAV purist you can skip
-  this entirely. [How do I add to PATH?](https://www.wikihow.com/Install-FFmpeg-on-Windows) - though if you're asking this then maybe the [release version](https://github.com/emzakit/xcom_anarchyfm/releases) is the way to go.
+
+That's it — **no ffmpeg install needed** any more. The decoder ships inside
+the `av` package in `requirements.txt`, so `.mp3`, `.ogg`, `.flac`, `.m4a`,
+`.opus` and friends all just play.
 
 I've provided a lazy way via the **`launch.bat`**:
 
@@ -170,44 +174,74 @@ Drop audio files into whichever state folder you want to score:
 | `STATE_MISSION_COMBAT/` | Tactical: it's kicking off |
 | `STATE_VICTORY/` | Post-mission victory sting |
 | `STATE_DEFEAT/` | Post-mission "well, that went badly" sting |
-| `STATE_RESISTANCE_RADIO/` | DEFAULT FOLDER <-- Shared "radio" pool (random-start — the fun one) |
+| `STATE_RESISTANCE_RADIO/` | The radio station pool — random-start, Avenger only (the fun one) |
 
 Every state also has a `_LOOP` twin (`STATE_AVENGER_LOOP/`, etc.) for tracks you
 want to loop rather than shuffle through. Leave a folder empty and Anarchy Radio FM just
 steps aside, letting the game's own music play for that screen. The full
 rundown — plus how to package up shareable Workshop music packs — lives in
-**[`MODDING_GUIDE.md`](MODDING_GUIDE.md)** and **[`music/README.md`](music/README.md)**.
+**[`MODDING_GUIDE.md`](MODDING_GUIDE.md)** and **[`music/music_readme.md`](music/music_readme.md)**.
 
 ---
 
 ## Resistance Radio mode (the good stuff)
 
-If you try one thing, try this. The `STATE_RESISTANCE_RADIO/` folder is a shared
-pool, and flipping **Radio Mode** on for a state pulls its music from here — with
-a lovely little twist: **every track starts from a random spot.** Like the
-station was already playing and you just tuned in mid-song. Nothing ever kicks
-off from the top, so it never feels like a playlist looping round the block — it
-feels like an actual *broadcast* you're ducking in and out of between the
-Avenger, the Geoscape, and wherever else the war takes you. This is the soul of
-the original Resistance Radio, and it's the first thing I'd send anyone to.
+If you try one thing, try this. Hit the **Radio Mode** button and the Avenger
+tunes into a station — with a lovely little twist: **every track starts from a
+random spot.** Like the broadcast was already running and you just tuned in
+mid-song. Nothing ever kicks off from the top, so it never feels like a
+playlist looping round the block; it feels like an actual *broadcast* you're
+ducking in and out of while you potter around the ship.
 
 **Want to *get it* in about thirty seconds?** Go download one of the **GTA radio
 stations** — they're long, unbroken mixes with DJ banter, fake adverts, the whole
 vibe. Drop one into `STATE_RESISTANCE_RADIO/`, switch Radio Mode on, and every
-time you change screens you'll land somewhere new in the broadcast: mid-track,
-mid-advert, mid-DJ-ramble. It just *clicks*. Toss in a few stations and you've
-got your own pirate radio humming away under the resistance.
+time you come back to the Avenger you'll land somewhere new in the broadcast:
+mid-track, mid-advert, mid-DJ-ramble. It just *clicks*.
 
 > Pro tip: long files really shine here. A 30–60 minute station mix gives that
 > random start loads of room to roam. Short single tracks work fine too, but the
 > "always live" magic is strongest with big, continuous audio.
 
+### Avenger only — on purpose
+
+Radio Mode applies to **the Avenger and nowhere else.** Every other screen is
+left completely alone.
+
+That's deliberate. Long-form radio is downtime atmosphere: it's perfect while
+you're wandering the ship, and actively bad everywhere else. On the main menu
+it fights the game's own music, and having a DJ crack a joke halfway through a
+firefight torpedoes the tension. So the button stays where it works.
+
+### Radio Source — three ways to use it
+
+With Radio Mode on, three buttons decide where the Avenger pulls from:
+
+| Button | What plays |
+|---|---|
+| **Radio Only** | `STATE_RESISTANCE_RADIO/` only *(falls back to `STATE_AVENGER/` if it's empty)* |
+| **Avenger Only** | `STATE_AVENGER/` only — your normal Avenger tracks, but with the random start points |
+| **Mix Both** | Both folders pooled — when a track finishes, the next can come from either |
+
+**Avenger Only** is the sleeper hit here: it gives your existing Avenger music
+the "tuned in mid-song" treatment without needing a radio folder at all.
+
+- **Off by default**, and not saved between runs — it's a mood you flip on,
+  not a setting to configure.
+- **It overrides `STATE_AVENGER_LOOP/`.** While Radio Mode is on, the loop
+  folder is skipped and the Loop Track setting is ignored — a station that
+  replays one track forever isn't a station. Switch Radio Mode off and your
+  loop track comes straight back.
+- Your per-state **Radio Source checkboxes in Effects are left alone.** Those
+  still work on any state, independently of this button, for anyone who wants
+  radio content elsewhere.
+
 **Changing stations, the lazy way:** there's no in-game menu to fiddle with — to
 skip to something new, just **dip in and out of the Geoscape** and back, exactly
-like the original Resistance Radio. Each round-trip reshuffles, and with Radio
-Mode on it drops you at a fresh random spot — basically retuning the dial. (If
-you'd rather have buttons, the in-game mod also ships `XiPodPlay` / `XiPodPause`
-/ `XiPodNext` / `XiPodPrev` console commands you can bind to keys.)
+like the original Resistance Radio. Each round-trip reshuffles and drops you at
+a fresh random spot — basically retuning the dial. (If you'd rather have
+buttons, the in-game mod also ships `XiPodPlay` / `XiPodPause` / `XiPodNext` /
+`XiPodPrev` console commands you can bind to keys.)
 
 ---
 
@@ -221,16 +255,17 @@ you'd rather have buttons, the in-game mod also ships `XiPodPlay` / `XiPodPause`
 - **Effects** — per-state presets and FX (radio filter, reverb, bass, chorus,
   bitcrush, echo), plus loop / random-start switches.
 - **Create Music Mod…** — spins up a ready-to-fill Workshop music-pack project.
-- **Web Player** *(experimental, Avenger only)* — more below.
-- **Spotify** *(experimental)* — also below.
-- It tucks into the system tray while you play and quietly shuts itself down when
-  the game (and your launcher) close.
+- **Spotify** *(experimental)* — more below.
+- **Radio Mode** *(+ Radio Source)* — tune the Avenger to a station. More below.
+- It tucks into the system tray while you play. **Close XCOM and the music
+  pauses straight away** — then it waits around in case you relaunch from your
+  mod launcher, and shuts itself down once that closes too.
 
 ---
 
 ## Spotify per state (experimental — your keys, your risk)
 
-<img src="img_spotify.png" alt="Spotify panel" width="520">
+<img src="assets/img_spotify.png" alt="Spotify panel" width="520">
 
 Here's a spicy one: pin a **Spotify playlist to each game state** — a combat
 playlist for combat, something mellow for the Avenger, and so on. It's
@@ -244,7 +279,6 @@ when the game changes state. Which means:
 
 - **You need Spotify Premium** (controlling playback is a Premium-only thing).
 - **The Spotify desktop app has to be open and running.**
-- It does **not** pipe through the in-app Web Player (that's YouTube's turf).
 - You bring your **own** Client ID / Secret from the Spotify Developer Dashboard.
   They live **only on your machine** (git-ignored) — guard the secret like a
   password.
@@ -257,26 +291,27 @@ in Anarchy Radio FM that opens it all up.
 
 ---
 
-## Web Player (experimental — Avenger only)
+## What happened to the Web Player? (removed in v2)
 
-<img src="img_youtube.png" alt="YouTube panel" width="520">
+Earlier versions had a **Web Player** — a browser embedded in the app for
+streaming YouTube. It's gone, and it isn't coming back. Three reasons:
 
-A fun little extra: a **browser baked right into Anarchy Radio FM** so you can stream music
-without alt-tabbing while you mooch around the base. The **Web Player** button
-only lights up **on the Avenger** — it's a downtime toy, and it's **experimental**,
-so enjoy it as a bonus rather than leaning on it.
+- **It was 360 MB of the download.** The embedded browser was QtWebEngine, a
+  full private copy of Chromium: a 195 MB DLL, 101 MB of resources and 44 MB
+  of locale files, all so you could look at one web page.
+- **Shipping a second browser is a security liability.** A bundled Chromium
+  is a browser engine that updates when *we* remember to update it, not when
+  Google ships a patch. That's a lot of attack surface to hang off a music
+  mod, and it's not surface anyone asked for.
+- **The replacement wasn't good enough.** We tried binding YouTube playlists
+  to game states through YouTube's official embedded player. It technically
+  worked, but uploaders block embedding constantly, and anyone without
+  Premium got advert breaks mid-mission. Not a soundtrack.
 
-- **YouTube / YouTube Music work great** — log in and it remembers you next time.
-- Type a web address, or just bash in a band name and it'll search YouTube for
-  you.
-- Want Spotify per state instead? That's its own feature — see the next section.
-- It's deliberately *not* tied into the state engine — it plays whatever you tell
-  it and mixes over the game like any other app. If you only want to DJ from
-  here, just leave the `STATE_*` folders empty.
-
-Runs on QtWebEngine, which rides along with `PySide6-Addons` (already in
-`requirements.txt`). If it's somehow missing, the button will tell you how to
-grab it.
+If you want streaming per state, **Spotify** does it properly, because there
+the desktop app does the playing and we just point it at a playlist. For
+everything else, local files and Radio Mode are what this app is actually
+good at.
 
 ---
 
@@ -284,7 +319,7 @@ grab it.
 
 | Path | What it is |
 |------|-----------|
-| `src/` | The app itself (audio engine, log watcher, GUI, web player, Spotify control, setup, MMS config writer) |
+| `src/` | The app itself (audio engine, log watcher, GUI, Spotify control, setup, MMS config writer) |
 | `tests/` | Unit + integration tests (`python -m unittest discover -s tests`) |
 | `SPOTIFY_SETUP.md` | Step-by-step for the experimental Spotify hook-up |
 | `music/` | Your music library — ships as empty `STATE_*` folders ready to fill |

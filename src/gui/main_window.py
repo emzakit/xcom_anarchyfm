@@ -5,7 +5,7 @@ import subprocess
 
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
-    QLabel, QPushButton, QSlider, QTextEdit,
+    QLabel, QPushButton, QSlider, QTextEdit, QButtonGroup,
     QSizePolicy, QFileDialog, QMessageBox,
     QSystemTrayIcon, QMenu,
 )
@@ -13,9 +13,10 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QFont, QTextCursor, QIcon, QAction, QPixmap
 
 from audio_engine import XiPodEngine
+from library import RADIO_SOURCE_RADIO, RADIO_SOURCE_STATE, RADIO_SOURCE_BOTH
 from log_watcher import Bridge
 from setup import import_workshop_mods, _create_state_folders
-from gui.theme import FONT_FAMILY, GREEN, GREEN_DIM, CYAN, STYLESHEET
+from gui.theme import FONT_FAMILY, PRIMARY, PRIMARY_DIM, ACCENT, STYLESHEET
 from gui.helpers import make_divider, html_escape
 from gui.log_hooks import log_signal
 from gui.options import OptionsDialog
@@ -28,8 +29,11 @@ from paths import resource_path
 
 # Bundled artwork (frozen-build aware — see paths.py). The banner doubles
 # as the window/tray icon — it's square, and Qt scales it down cleanly.
-_ICON_PATH = resource_path("AnarchyFM.png")
-_BANNER_PATH = resource_path("AnarchyFM.png")
+# This is the 512px copy, not the 2048px AnarchyFM.png in the project root:
+# it's never drawn wider than ~240px, and the full-size original cost 9.6 MB
+# of the build for nothing.
+_ICON_PATH = resource_path("assets", "banner.png")
+_BANNER_PATH = resource_path("assets", "banner.png")
 
 
 class XiPodWindow(QWidget):
@@ -41,9 +45,9 @@ class XiPodWindow(QWidget):
         self.bridge = None
         self._auto_close = cfg.get("auto_close_with_game", True)
         self._xcom_was_running = False
+        self._game_exit_handled = False
         self._options_dialog = None
         self._effects_dialog = None
-        self._web_window = None
         self._spotify_dialog = None
         self._shutting_down = False
 
@@ -66,12 +70,12 @@ class XiPodWindow(QWidget):
         else:
             header.setText("Anarchy Radio FM")
             header.setFont(QFont(FONT_FAMILY, 18, QFont.Bold))
-            header.setStyleSheet(f"color: {GREEN};")
+            header.setStyleSheet(f"color: {PRIMARY};")
         root.addWidget(header)
 
         subtitle = QLabel("Local & Spotify soundtracks for XCOM 2")
         subtitle.setFont(QFont(FONT_FAMILY, 10))
-        subtitle.setStyleSheet(f"color: {GREEN_DIM};")
+        subtitle.setStyleSheet(f"color: {PRIMARY_DIM};")
         subtitle.setAlignment(Qt.AlignCenter)
         root.addWidget(subtitle)
         root.addWidget(make_divider())
@@ -95,33 +99,74 @@ class XiPodWindow(QWidget):
             btn.clicked.connect(handler)
             panel_grid.addWidget(btn, i // 3, i % 3)
 
-        # Web Player (experimental) — only enabled while on the Avenger.
-        # Streaming music (e.g. YouTube) in an embedded browser, for base
-        # downtime. Gated to the Avenger state; enabled in _refresh_ui.
-        self._web_btn = QPushButton("Web Player")
-        self._web_btn.setObjectName("panelBtn")
-        self._web_btn.setCursor(Qt.PointingHandCursor)
-        self._web_btn.setEnabled(False)
-        self._web_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self._web_btn.setToolTip(
-            "EXPERIMENTAL — open from the Avenger to stream music (e.g. YouTube)\n"
-            "in an embedded browser. Available only while you're on the Avenger."
+        # Radio Mode — the fun one. Avenger ONLY: long-form radio content is
+        # downtime atmosphere, and it actively hurts everywhere else. Off by
+        # default and not persisted; it's a mood you switch on for a session,
+        # not a setting.
+        self._radio_btn = QPushButton("Radio Mode (Off)")
+        self._radio_btn.setObjectName("panelBtn")
+        self._radio_btn.setCheckable(True)
+        self._radio_btn.setCursor(Qt.PointingHandCursor)
+        self._radio_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self._radio_btn.setToolTip(
+            "AVENGER ONLY — tune the Avenger to a station, with a random\n"
+            "start on each track, as if you'd caught a broadcast part-way\n"
+            "through. Every other screen is left completely alone.\n\n"
+            "Leaves the per-state Radio Source checkboxes in Effects\n"
+            "untouched; turn this off and they apply again."
         )
-        self._web_btn.clicked.connect(self._on_web_player)
-        panel_grid.addWidget(self._web_btn, 1, 2)  # row 2, last column
+        self._radio_btn.toggled.connect(self._on_radio_mode)
+        panel_grid.addWidget(self._radio_btn, 1, 2)  # row 2, last column
 
         root.addLayout(panel_grid)
+
+        # --- Radio Mode source (which folder the Avenger draws from) ---
+        source_row = QHBoxLayout()
+        source_row.setSpacing(4)
+        src_lbl = QLabel("Radio Source:")
+        src_lbl.setFont(QFont(FONT_FAMILY, 10))
+        src_lbl.setStyleSheet(f"color: {PRIMARY_DIM};")
+        source_row.addWidget(src_lbl)
+
+        self._radio_source_group = QButtonGroup(self)
+        self._radio_source_group.setExclusive(True)
+        for key, label, tip in [
+            (RADIO_SOURCE_RADIO, "Radio Only",
+             "Play only from STATE_RESISTANCE_RADIO.\n"
+             "Falls back to STATE_AVENGER if that folder is empty."),
+            (RADIO_SOURCE_STATE, "Avenger Only",
+             "Play only from STATE_AVENGER — your normal Avenger tracks,\n"
+             "but with Radio Mode's random start points."),
+            (RADIO_SOURCE_BOTH, "Mix Both",
+             "Pool STATE_RESISTANCE_RADIO and STATE_AVENGER together.\n"
+             "When a track finishes, the next one can come from either."),
+        ]:
+            b = QPushButton(label)
+            b.setCheckable(True)
+            b.setCursor(Qt.PointingHandCursor)
+            b.setFixedHeight(26)
+            b.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            b.setToolTip(tip)
+            b.setProperty("radioSource", key)
+            if key == RADIO_SOURCE_RADIO:
+                b.setChecked(True)
+            self._radio_source_group.addButton(b)
+            source_row.addWidget(b)
+        self._radio_source_group.buttonClicked.connect(self._on_radio_source)
+        self._set_source_buttons_enabled(False)
+
+        root.addLayout(source_row)
         root.addWidget(make_divider())
 
         # --- Now Playing ---
         self.state_label = QLabel("Waiting for XCOM...")
         self.state_label.setFont(QFont(FONT_FAMILY, 10))
-        self.state_label.setStyleSheet(f"color: {GREEN_DIM};")
+        self.state_label.setStyleSheet(f"color: {PRIMARY_DIM};")
         root.addWidget(self.state_label)
 
         self.track_label = QLabel("")
         self.track_label.setFont(QFont(FONT_FAMILY, 13, QFont.Bold))
-        self.track_label.setStyleSheet(f"color: {CYAN};")
+        self.track_label.setStyleSheet(f"color: {ACCENT};")
         self.track_label.setWordWrap(True)
         root.addWidget(self.track_label)
         root.addSpacing(4)
@@ -153,7 +198,7 @@ class XiPodWindow(QWidget):
 
         vol_lbl = QLabel("VOL")
         vol_lbl.setFont(QFont(FONT_FAMILY, 10))
-        vol_lbl.setStyleSheet(f"color: {GREEN_DIM};")
+        vol_lbl.setStyleSheet(f"color: {PRIMARY_DIM};")
         transport.addWidget(vol_lbl)
 
         self.vol_slider = QSlider(Qt.Horizontal)
@@ -164,7 +209,7 @@ class XiPodWindow(QWidget):
 
         self.vol_pct = QLabel(f"{self.vol_slider.value()}%")
         self.vol_pct.setFont(QFont(FONT_FAMILY, 10))
-        self.vol_pct.setStyleSheet(f"color: {GREEN_DIM};")
+        self.vol_pct.setStyleSheet(f"color: {PRIMARY_DIM};")
         self.vol_pct.setFixedWidth(40)
         transport.addWidget(self.vol_pct)
 
@@ -174,7 +219,7 @@ class XiPodWindow(QWidget):
         # --- State Toggles ---
         toggle_header = QLabel("State Toggles  (takes effect on next game launch)")
         toggle_header.setFont(QFont(FONT_FAMILY, 10))
-        toggle_header.setStyleSheet(f"color: {GREEN_DIM};")
+        toggle_header.setStyleSheet(f"color: {PRIMARY_DIM};")
         root.addWidget(toggle_header)
 
         toggle_grid = QHBoxLayout()
@@ -207,7 +252,7 @@ class XiPodWindow(QWidget):
         log_header_row = QHBoxLayout()
         log_lbl = QLabel("COMMS LOG")
         log_lbl.setFont(QFont(FONT_FAMILY, 10, QFont.Bold))
-        log_lbl.setStyleSheet(f"color: {GREEN_DIM};")
+        log_lbl.setStyleSheet(f"color: {PRIMARY_DIM};")
         log_header_row.addWidget(log_lbl)
         log_header_row.addStretch()
 
@@ -231,10 +276,12 @@ class XiPodWindow(QWidget):
         self._refresh_timer.timeout.connect(self._refresh_ui)
         self._refresh_timer.start(1000)
 
-        if self._auto_close:
-            self._xcom_timer = QTimer(self)
-            self._xcom_timer.timeout.connect(self._check_xcom)
-            self._xcom_timer.start(3000)
+        # Always runs, even with auto-close off: _check_xcom pauses playback
+        # when the game exits regardless, and only the shutdown half of it
+        # depends on auto_close_with_game.
+        self._xcom_timer = QTimer(self)
+        self._xcom_timer.timeout.connect(self._check_xcom)
+        self._xcom_timer.start(3000)
 
         # --- System Tray ---
         self.tray = None
@@ -373,32 +420,26 @@ class XiPodWindow(QWidget):
         self._effects_dialog.closed.connect(lambda: setattr(self, '_effects_dialog', None))
         self._effects_dialog.show()
 
-    def _on_web_player(self):
-        # Experimental, Avenger-only. The button is disabled off-Avenger,
-        # but guard here too in case of a stale click.
-        if not self.engine or self.engine.current_top != "state_avenger":
-            console.warn("Web Player is an Avenger-only feature. Head to the Avenger first.")
+    def _set_source_buttons_enabled(self, enabled):
+        for b in self._radio_source_group.buttons():
+            b.setEnabled(enabled)
+
+    def _on_radio_mode(self, checked):
+        self._radio_btn.setText(f"Radio Mode ({'On' if checked else 'Off'})")
+        if not self.engine:
+            # Engine still starting — put the button back so the label never
+            # claims a mode the engine isn't actually in.
+            if checked:
+                console.warn("Engine not running yet. Radio Mode will be available after startup.")
+                self._radio_btn.setChecked(False)
             return
-        if self._web_window and self._web_window.isVisible():
-            self._web_window.raise_()
-            self._web_window.activateWindow()
+        self._set_source_buttons_enabled(checked)
+        self.engine.set_radio_override(checked)
+
+    def _on_radio_source(self, button):
+        if not self.engine:
             return
-        try:
-            from gui.browser import WebPlayerWindow
-        except Exception as e:
-            console.warn(f"Web Player needs QtWebEngine (PySide6-Addons): {e}")
-            QMessageBox.warning(
-                self, "Web Player unavailable",
-                "The in-app browser needs QtWebEngine, which ships with "
-                "PySide6-Addons.\n\nInstall it with:\n    pip install PySide6-Addons",
-            )
-            return
-        console.shen("Opening Web Player (experimental) — Avenger downtime jukebox.")
-        self._web_window = WebPlayerWindow()
-        self._web_window.setStyleSheet(STYLESHEET)
-        self._web_window.setWindowIcon(self.windowIcon())
-        self._web_window.closed.connect(lambda: setattr(self, '_web_window', None))
-        self._web_window.show()
+        self.engine.set_radio_source(button.property("radioSource"))
 
     def _on_spotify(self):
         if self._spotify_dialog and self._spotify_dialog.isVisible():
@@ -507,11 +548,6 @@ class XiPodWindow(QWidget):
         else:
             self.state_label.setText("Waiting for XCOM...")
 
-        # Web Player is an experimental, Avenger-only feature — enable the
-        # button only while on the Avenger. An already-open window keeps
-        # working regardless (you can keep listening past the Avenger).
-        self._web_btn.setEnabled(state == "state_avenger")
-
     def _append_log(self, text, color):
         self.log_view.moveCursor(QTextCursor.End)
         self.log_view.insertHtml(
@@ -525,29 +561,50 @@ class XiPodWindow(QWidget):
             cursor.removeSelectedText()
 
     def _check_xcom(self):
-        """Dual-gate lifecycle: stay alive while EITHER the game or the
-        configured launcher (AML) is running, so the user can relaunch
-        after a crash without restarting Anarchy Radio FM. Quit when both are gone."""
+        """Watch the game process. Two separate jobs:
+
+        1. Pause playback the moment XCOM itself exits. The app deliberately
+           outlives the game while a launcher (AML) is still open, so you can
+           relaunch without restarting it — but it used to keep playing to an
+           empty desktop for as long as the launcher stayed up. It doesn't now.
+        2. Shut down once BOTH the game and the launcher are gone — and only
+           when auto_close_with_game is on.
+
+        The pause is not gated on auto_close: that setting is about whether
+        the app quits, not about serenading a desktop with no game on it.
+        """
         watched = process_utils.watched_names(self.cfg.get("game_exe", ""))
         running = process_utils.running_processes(watched)
         if running is None:
-            return  # tasklist hiccup — never shut down on "unknown"
+            return  # tasklist hiccup — never act on "unknown"
+
         if process_utils.GAME_PROCESS in running:
             self._xcom_was_running = True
-        elif self._xcom_was_running and not running:
+            self._game_exit_handled = False   # armed again for the next exit
+            return
+
+        if not self._xcom_was_running:
+            return  # game hasn't been seen yet — nothing to react to
+
+        # XCOM has gone. Silence the music once (the timer keeps firing, and
+        # re-pausing every 3s would stomp a manual play).
+        if not self._game_exit_handled:
+            self._game_exit_handled = True
+            if self.engine:
+                self.engine.pause()
+            console.shen("XCOM has closed — pausing playback.")
+
+        if self._auto_close and not running:
             console.divider()
             console.shen("XCOM has signed off. Powering down Anarchy Radio FM.")
             console.divider()
             self._shutdown()
-        # else: game closed but launcher still open — standby for relaunch
+        # else: launcher still open (or auto-close off) — standby for relaunch
 
     def _shutdown(self):
         if self._shutting_down:
             return
         self._shutting_down = True
-        if self._web_window:
-            self._web_window.close()
-            self._web_window = None
         if self._spotify_dialog:
             self._spotify_dialog.close()
             self._spotify_dialog = None

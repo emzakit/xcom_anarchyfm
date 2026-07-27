@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 
-from gui.theme import FONT_FAMILY, GREEN, GREEN_DIM, BORDER
+from gui.theme import FONT_FAMILY, PRIMARY, PRIMARY_DIM, BORDER
 
 
 def make_divider():
@@ -21,13 +21,13 @@ def path_row(parent_layout, label_text, tooltip, browse_fn, initial="", browse_l
     """Create a label + line edit + browse button row. Returns the QLineEdit."""
     lbl = QLabel(label_text)
     lbl.setFont(QFont(FONT_FAMILY, 11, QFont.Bold))
-    lbl.setStyleSheet(f"color: {GREEN};")
+    lbl.setStyleSheet(f"color: {PRIMARY};")
     parent_layout.addWidget(lbl)
 
     if tooltip:
         hint = QLabel(tooltip)
         hint.setFont(QFont(FONT_FAMILY, 10))
-        hint.setStyleSheet(f"color: {GREEN_DIM};")
+        hint.setStyleSheet(f"color: {PRIMARY_DIM};")
         hint.setWordWrap(True)
         parent_layout.addWidget(hint)
 

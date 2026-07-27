@@ -2,9 +2,9 @@ import sys
 
 
 def main():
-    # Must run before pydub spawns ffmpeg: otherwise, when launched windowless
-    # (pythonw), each ffmpeg decode flashes a console window and steals focus
-    # from the game on every music-state change.
+    # Must run before anything spawns a child process: when launched
+    # windowless (pythonw), each spawn would otherwise flash a console window
+    # and steal focus from the game.
     import win_quiet
     win_quiet.silence_child_console_windows()
 

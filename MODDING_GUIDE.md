@@ -32,14 +32,31 @@ Anarchy Radio FM's music library is a single folder containing state subfolders.
 | `STATE_MISSION_COMBAT_LOOP/` | Tactical: Combat (loop) | Looping variant |
 | `STATE_VICTORY/` | Victory stinger | After-action: flawless or with casualties |
 | `STATE_DEFEAT/` | Defeat stinger | After-action: squad wipe / mission loss |
-| `STATE_RESISTANCE_RADIO/` | Resistance Radio | Shared pool for "radio mode" on any state |
+| `STATE_RESISTANCE_RADIO/` | Resistance Radio | The station pool — used by the Radio Mode button (Avenger) and the per-state Radio Source checkbox |
 
 ### How Playlists Resolve
 
-1. If the user enables **Radio Mode** for a state (via MCM), tracks play from `STATE_RESISTANCE_RADIO/` instead of the state's own folder.
-2. If the user enables **Loop** for a state, Anarchy Radio FM checks the `_LOOP` folder first. If it has tracks, those are used. If empty, falls back to the base folder.
-3. Otherwise, tracks play from the base state folder.
-4. If a folder is empty, Anarchy Radio FM does nothing for that state and the game's native music (via MMS) plays through.
+Checked in this order:
+
+1. **Radio Mode button ON, and the state is the Avenger.** Tracks come from
+   whichever folder the Radio Source buttons select — `STATE_RESISTANCE_RADIO/`,
+   `STATE_AVENGER/`, or both pooled — always with a forced random start.
+   This path **ignores `STATE_AVENGER_LOOP/` and the Loop setting entirely**:
+   a station that repeats one track forever isn't a station.
+2. **Per-state Radio Source checkbox** (Effects panel, works on any state).
+   Tracks play from `STATE_RESISTANCE_RADIO/` instead of the state's own
+   folder, falling back to the state folder if the radio pool is empty.
+3. **Loop enabled for the state.** Anarchy Radio FM checks the `_LOOP` folder
+   first. If it has tracks, those are used and repeated. If empty, falls back
+   to the base folder.
+4. **Otherwise**, tracks play from the base state folder.
+5. **If a folder is empty**, Anarchy Radio FM does nothing for that state and
+   the game's native music (via MMS) plays through.
+
+> The Radio Mode button is **Avenger-only by design** — long-form radio content
+> fights the game's own music on the shell menu and wrecks the tension mid-
+> combat. If you want radio content on other states, that's what the per-state
+> checkbox in step 2 is for.
 
 ### Stinger States
 
@@ -52,6 +69,13 @@ Anarchy Radio FM's music library is a single folder containing state subfolders.
 - `.mp3` -- recommended for file size
 - `.ogg` -- good quality/size ratio
 - `.wav` -- uncompressed, larger files but zero quality loss
+- `.flac` -- lossless, still compressed
+- `.m4a` / `.opus` / `.wma` -- also supported
+
+As of v2 the decoder (PyAV) ships inside the app, so **users no longer need
+ffmpeg installed** — v1 only handled `.mp3`/`.ogg`/`.wav`, and only if the user
+had put ffmpeg on their PATH. If you're distributing a pack that targets both
+versions, `.mp3` remains the safest bet.
 
 All tracks are normalized to 16-bit 44100Hz stereo at runtime. You can use any sample rate or bit depth, but 44100Hz 16-bit stereo is optimal.
 
@@ -105,7 +129,7 @@ When the user sets their Workshop folder in Anarchy Radio FM setup, the app scan
 2. Copies audio files from each source path into the corresponding `STATE_*` folder in the user's music library
 3. Skips files that already exist (won't overwrite user's existing tracks)
 
-Only `.mp3`, `.wav`, and `.ogg` files are copied.
+Only recognised audio files are copied — `.mp3`, `.wav`, `.ogg`, `.flac`, `.m4a`, `.opus` and `.wma`. Anything else in the source folders is ignored.
 
 ### 4. Descriptor Reference
 
@@ -121,7 +145,7 @@ Valid folder keys are any of the state folders listed in the Folder Structure ta
 
 ## Manual Installation (No Workshop)
 
-Users can also manually drop audio files into the state folders in their music library. No descriptor needed -- just put `.mp3`, `.ogg`, or `.wav` files directly into the appropriate `STATE_*` folder.
+Users can also manually drop audio files into the state folders in their music library. No descriptor needed -- just put any supported audio file directly into the appropriate `STATE_*` folder. See [`music/music_readme.md`](music/music_readme.md) for the folder-by-folder rundown.
 
 ---
 
@@ -132,7 +156,8 @@ Users can also manually drop audio files into the state folders in their music l
 - **Volume consistency**: Anarchy Radio FM applies per-state volume scaling, but try to keep your tracks at a consistent loudness level. Normalize to around -14 LUFS.
 - **File naming**: Use descriptive names -- they show up in the Anarchy Radio FM desktop app's "Now Playing" and logs (e.g., `Avenger_Chill_Vibes.mp3` instead of `track_01.mp3`). File extensions are stripped for display.
 - **Stinger length**: Victory/defeat stingers work best at 30-90 seconds. They play once and stop.
-- **Radio tracks**: `STATE_RESISTANCE_RADIO/` is a shared pool. When the user enables Radio Mode for any state, tracks from this folder play instead. Great for "Resistance Radio"-style variety content.
+- **Radio tracks**: `STATE_RESISTANCE_RADIO/` is the station pool. When the user hits Radio Mode, the Avenger plays from here with random start points. This is where long-form content shines — hour-long DJ sets, mixtapes, fake ad breaks. Short single tracks work, but the "always live" effect needs room to roam, so favour long continuous audio here.
+- **Don't put combat music in the radio folder**: Radio Mode only ever applies to the Avenger, so anything here is downtime music by definition.
 
 ---
 

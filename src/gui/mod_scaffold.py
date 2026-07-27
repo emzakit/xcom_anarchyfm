@@ -31,7 +31,8 @@ def scaffold_music_mod(project_dir):
 
     with open(os.path.join(project_dir, "README.txt"), "w", encoding="utf-8") as f:
         f.write("Anarchy Radio FM Music Mod\n" + "=" * 40 + "\n\n")
-        f.write("Drop your audio files (.mp3, .ogg, .wav) into the folders\n")
+        f.write("Drop your audio files (.mp3, .ogg, .wav, .flac, .m4a, .opus)\n"
+                "into the folders\n")
         f.write("inside music/ that match the game states you want to replace.\n\n")
         f.write("Folder reference:\n")
         for state in MOD_FOLDERS:

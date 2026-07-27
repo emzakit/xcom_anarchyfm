@@ -8,7 +8,7 @@ keep calling console.shen()/warn()/etc.
 
 from PySide6.QtCore import Signal, QObject
 import console
-from gui.theme import GREEN, CYAN, AMBER, GREEN_DIM, RED_DIM, BORDER
+from gui.theme import PRIMARY, ACCENT, AMBER, PRIMARY_DIM, RED_DIM, BORDER, MUTED
 
 
 class LogSignal(QObject):
@@ -31,11 +31,11 @@ def install_log_hooks():
 
     def shen(msg):
         original_shen(msg)
-        log_signal.message.emit(f"SHEN: {msg}", GREEN)
+        log_signal.message.emit(f"SHEN: {msg}", PRIMARY)
 
     def track(label, name):
         original_track(label, name)
-        log_signal.message.emit(f"{label}: {name}", CYAN)
+        log_signal.message.emit(f"{label}: {name}", ACCENT)
 
     def signal(msg):
         original_signal(msg)
@@ -43,7 +43,7 @@ def install_log_hooks():
 
     def debug(msg):
         original_debug(msg)
-        log_signal.message.emit(f"   {msg}", GREEN_DIM)
+        log_signal.message.emit(f"   {msg}", PRIMARY_DIM)
 
     def warn(msg):
         original_warn(msg)
@@ -55,7 +55,7 @@ def install_log_hooks():
 
     def faint(msg):
         original_faint(msg)
-        log_signal.message.emit(f"   {msg}", "#555555")
+        log_signal.message.emit(f"   {msg}", MUTED)
 
     def divider():
         original_divider()

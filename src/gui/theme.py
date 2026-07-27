@@ -1,22 +1,33 @@
-"""Anarchy Radio FM GUI Theme — colours, fonts, and stylesheet."""
+"""Anarchy Radio FM GUI Theme — colours, fonts, and stylesheet.
 
-BG          = "#0a0a0a"
-BG_FIELD    = "#0f1a0f"
-BG_HOVER    = "#1a2e1a"
-GREEN       = "#33ff33"
-GREEN_DIM   = "#1a8c1a"
-GREEN_FAINT = "#0d4d0d"
-CYAN        = "#33ffcc"
-AMBER       = "#ccaa33"
-RED_DIM     = "#8c1a1a"
-BORDER      = "#1a4d1a"
+Palette lifted from the XCOM 2 Avenger UI: cyan-teal on a near-black navy
+for everything structural, with the amber/gold from the Geoscape status
+lights as the secondary — used sparingly, for log lines that want to stand
+out from the wall of teal (incoming signals and warnings).
+
+The primary constants are named PRIMARY* rather than by colour so this can be
+re-skinned without every call site reading like a lie.
+"""
+
+BG            = "#08141a"   # near-black navy — window background
+BG_FIELD      = "#0e222b"   # panel / input fill
+BG_HOVER      = "#163a47"
+PRIMARY       = "#5fd3e3"   # main cyan — body text, icons, active borders
+PRIMARY_DIM   = "#2b8998"   # dimmed labels, secondary captions
+PRIMARY_FAINT = "#103641"   # button fill, pressed state
+PRIMARY_ON    = "#17505f"   # checked/lit toggle fill — reads as ON at a glance
+ACCENT        = "#a8e9f2"   # bright highlight — track names, selected rows
+AMBER         = "#d9a441"   # secondary — incoming signals, warnings
+RED_DIM       = "#a3502a"   # errors, kept brown-red so it sits in-palette
+BORDER        = "#1d5a68"
+MUTED         = "#3d5560"   # log noise — readable, but recedes into the panel
 
 FONT_FAMILY = "Consolas"
 
 STYLESHEET = f"""
 QWidget {{
     background-color: {BG};
-    color: {GREEN};
+    color: {PRIMARY};
     font-family: {FONT_FAMILY};
     font-size: 13px;
 }}
@@ -28,35 +39,40 @@ QLineEdit {{
     background-color: {BG_FIELD};
     border: 1px solid {BORDER};
     border-radius: 3px;
-    color: {GREEN};
+    color: {PRIMARY};
     padding: 6px 8px;
     font-family: {FONT_FAMILY};
     font-size: 13px;
-    selection-background-color: {GREEN_DIM};
+    selection-background-color: {PRIMARY_DIM};
 }}
 QLineEdit:focus {{
-    border: 1px solid {GREEN_DIM};
+    border: 1px solid {PRIMARY_DIM};
 }}
 QPushButton {{
     background-color: {BG_FIELD};
     border: 1px solid {BORDER};
     border-radius: 3px;
-    color: {GREEN};
+    color: {PRIMARY};
     padding: 6px 14px;
     font-family: {FONT_FAMILY};
     font-size: 13px;
 }}
 QPushButton:hover {{
     background-color: {BG_HOVER};
-    border: 1px solid {GREEN_DIM};
+    border: 1px solid {PRIMARY_DIM};
 }}
 QPushButton:pressed {{
-    background-color: {GREEN_FAINT};
+    background-color: {PRIMARY_FAINT};
 }}
+/* Checked has to read as ON at a glance — the state toggles are the main
+   thing you scan on this window. PRIMARY_FAINT alone sat too close to
+   BG_FIELD to tell apart, so lit uses a brighter fill, a full-strength
+   border and the accent text colour. */
 QPushButton:checked {{
-    background-color: {GREEN_FAINT};
-    border: 1px solid {GREEN_DIM};
-    color: {GREEN};
+    background-color: {PRIMARY_ON};
+    border: 1px solid {PRIMARY};
+    color: {ACCENT};
+    font-weight: bold;
 }}
 QPushButton#playBtn {{
     font-size: 16px;
@@ -70,19 +86,19 @@ QPushButton#panelBtn {{
     min-width: 100px;
 }}
 QPushButton#panelBtn:checked {{
-    background-color: {GREEN_DIM};
+    background-color: {PRIMARY_DIM};
     color: {BG};
 }}
 QPushButton#launchBtn {{
-    background-color: {GREEN_FAINT};
-    border: 1px solid {GREEN_DIM};
-    color: {GREEN};
+    background-color: {PRIMARY_FAINT};
+    border: 1px solid {PRIMARY_DIM};
+    color: {PRIMARY};
     font-size: 15px;
     font-weight: bold;
     padding: 10px 20px;
 }}
 QPushButton#launchBtn:hover {{
-    background-color: {GREEN_DIM};
+    background-color: {PRIMARY_DIM};
     color: {BG};
 }}
 QSlider::groove:horizontal {{
@@ -92,25 +108,25 @@ QSlider::groove:horizontal {{
     border-radius: 3px;
 }}
 QSlider::handle:horizontal {{
-    background: {GREEN};
-    border: 1px solid {GREEN_DIM};
+    background: {PRIMARY};
+    border: 1px solid {PRIMARY_DIM};
     width: 14px;
     margin: -5px 0;
     border-radius: 7px;
 }}
 QSlider::sub-page:horizontal {{
-    background: {GREEN_DIM};
+    background: {PRIMARY_DIM};
     border-radius: 3px;
 }}
 QTextEdit {{
     background-color: {BG_FIELD};
     border: 1px solid {BORDER};
     border-radius: 3px;
-    color: {GREEN};
+    color: {PRIMARY};
     font-family: {FONT_FAMILY};
     font-size: 11px;
     padding: 4px;
-    selection-background-color: {GREEN_DIM};
+    selection-background-color: {PRIMARY_DIM};
 }}
 QFrame#divider {{
     background-color: {BORDER};
@@ -124,36 +140,36 @@ QGroupBox {{
     padding: 12px 8px 8px 8px;
     font-family: {FONT_FAMILY};
     font-size: 13px;
-    color: {GREEN};
+    color: {PRIMARY};
 }}
 QGroupBox::title {{
     subcontrol-origin: margin;
     subcontrol-position: top left;
     padding: 2px 8px;
-    color: {GREEN};
+    color: {PRIMARY};
     font-weight: bold;
 }}
 QComboBox {{
     background-color: {BG_FIELD};
     border: 1px solid {BORDER};
     border-radius: 3px;
-    color: {GREEN};
+    color: {PRIMARY};
     padding: 4px 8px;
     font-family: {FONT_FAMILY};
     font-size: 13px;
 }}
 QComboBox:hover {{
-    border: 1px solid {GREEN_DIM};
+    border: 1px solid {PRIMARY_DIM};
 }}
 QComboBox QAbstractItemView {{
     background-color: {BG_FIELD};
     border: 1px solid {BORDER};
-    color: {GREEN};
-    selection-background-color: {GREEN_DIM};
+    color: {PRIMARY};
+    selection-background-color: {PRIMARY_DIM};
     font-family: {FONT_FAMILY};
 }}
 QCheckBox {{
-    color: {GREEN};
+    color: {PRIMARY};
     font-family: {FONT_FAMILY};
     spacing: 6px;
 }}
@@ -165,11 +181,11 @@ QCheckBox::indicator {{
     background-color: {BG_FIELD};
 }}
 QCheckBox::indicator:checked {{
-    background-color: {GREEN_DIM};
-    border: 1px solid {GREEN};
+    background-color: {PRIMARY_DIM};
+    border: 1px solid {PRIMARY};
 }}
 QCheckBox::indicator:hover {{
-    border: 1px solid {GREEN_DIM};
+    border: 1px solid {PRIMARY_DIM};
 }}
 QTabWidget::pane {{
     border: 1px solid {BORDER};
@@ -178,14 +194,14 @@ QTabWidget::pane {{
 QTabBar::tab {{
     background-color: {BG_FIELD};
     border: 1px solid {BORDER};
-    color: {GREEN_DIM};
+    color: {PRIMARY_DIM};
     padding: 6px 16px;
     font-family: {FONT_FAMILY};
     font-size: 12px;
 }}
 QTabBar::tab:selected {{
-    background-color: {GREEN_FAINT};
-    color: {GREEN};
+    background-color: {PRIMARY_FAINT};
+    color: {PRIMARY};
     border-bottom: 1px solid {BG};
 }}
 QTabBar::tab:hover {{

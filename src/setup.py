@@ -11,6 +11,7 @@ import shutil
 import console
 
 from paths import data_path
+from library import AUDIO_EXTENSIONS
 
 # Per-user config — lives next to the exe when frozen, project root in dev.
 CONFIG_PATH = data_path("xipod_config.json")
@@ -167,7 +168,7 @@ def _import_single_mod(json_path, mod_root, music_folder):
             os.makedirs(dst_dir)
 
         for audio_file in os.listdir(src_dir):
-            if audio_file.lower().endswith((".mp3", ".wav", ".ogg")):
+            if audio_file.lower().endswith(AUDIO_EXTENSIONS):
                 src_path = os.path.join(src_dir, audio_file)
                 dst_path = os.path.join(dst_dir, audio_file)
                 if not os.path.exists(dst_path):

@@ -8,9 +8,13 @@ from pydub import AudioSegment
 
 # STINGER_STATES (victory/defeat: play once, no loop, no advance) is defined
 # in library.py alongside the other state-folder lists — single source of truth.
-from library import MusicLibrary, STINGER_STATES
+from library import (
+    MusicLibrary, STINGER_STATES,
+    RADIO_MODE_STATE, RADIO_SOURCE_RADIO,
+)
 from settings import EngineSettings
 from playback import PlaybackController
+from decode import load_audio
 import console
 import mms_config
 
@@ -62,6 +66,16 @@ class XiPodEngine:
         self.spotify = None
         self._spotify_active = False
         self._spotify_paused = False
+
+        # Radio Mode (the panel button). Applies to the Avenger ONLY — see
+        # RADIO_MODE_STATE in library.py for why. Tracks get a forced random
+        # start, as if you'd tuned into a station mid-broadcast.
+        # Deliberately a separate flag rather than flipping settings.radio:
+        # the per-state checkboxes in the Effects dialog are the user's saved
+        # preferences, and a temporary master switch has no business
+        # overwriting them.
+        self.radio_override = False
+        self.radio_source = RADIO_SOURCE_RADIO
 
         # Paths for rescan
         self._root_folder = None
@@ -123,8 +137,14 @@ class XiPodEngine:
 
     @staticmethod
     def _normalize(segment):
-        """Force 16-bit 44100Hz stereo — WAV files may be 24/32-bit which
-        causes pyaudio to open a stream that many devices output as silence."""
+        """Force 16-bit 44100Hz stereo — pyaudio opens a stream that many
+        devices output as silence for odd sample widths.
+
+        decode.load_audio already guarantees 16-bit/44100Hz, so in practice
+        only the mono->stereo branch still fires (deliberately left to pydub;
+        see the layout note in decode.py). The rest is kept as a safety net
+        for segments built elsewhere, e.g. the FX chain's raw constructor.
+        """
         if segment.sample_width != 2:
             console.debug(f"Normalizing: {segment.sample_width * 8}-bit -> 16-bit")
             segment = segment.set_sample_width(2)
@@ -176,7 +196,7 @@ class XiPodEngine:
         state_random=True honors the per-state random-start toggle
         (only wanted on state switches, not on skips/auto-advance).
         """
-        segment = AudioSegment.from_file(track['path'])
+        segment = load_audio(track['path'])
         segment = self._normalize(segment)
         if random_start:
             segment = self._apply_random_start(segment, self.current_top, force=True)
@@ -211,6 +231,11 @@ class XiPodEngine:
         self._silent_override = True
         self.active_playlist = []
         self.active_index = 0
+        # This path returns before the radio resolution below, so clear the
+        # flag explicitly — otherwise it stays stale from whatever state we
+        # came from, and a later resume would apply a random start that this
+        # state never asked for.
+        self._radio_mode = False
 
         console.shen(f"Silent override for {top} — game music has the conn.")
         silence = AudioSegment.silent(duration=SILENT_DURATION_MS, frame_rate=44100)
@@ -275,10 +300,26 @@ class XiPodEngine:
 
         self._silent_override = False
 
-        radio_mode = self.settings.is_radio_mode(top)
-        self._radio_mode = radio_mode
         use_loop = self._should_loop_for_state(top)
-        playlist = self.library.resolve_playlist(top, use_loop=use_loop, use_radio=radio_mode)
+
+        # Radio Mode owns the Avenger and nothing else. Everywhere else falls
+        # through to the per-state Radio Source checkbox in Effects, which is
+        # a separate, deliberately-configured thing and stays untouched.
+        if self.radio_override and top == RADIO_MODE_STATE:
+            radio_mode = True
+            # Radio Mode supersedes the _LOOP folder AND the loop flag. The
+            # folder is bypassed in resolve_radio_playlist; clearing use_loop
+            # here keeps the debug line honest, and _should_loop() refuses to
+            # repeat while radio is live — a station that replays one track
+            # forever isn't a station.
+            use_loop = False
+            playlist = self.library.resolve_radio_playlist(top, self.radio_source)
+        else:
+            radio_mode = self.settings.is_radio_mode(top)
+            playlist = self.library.resolve_playlist(
+                top, use_loop=use_loop, use_radio=radio_mode)
+
+        self._radio_mode = radio_mode
         console.debug(f"switch_state({top}) radio={radio_mode} loop={use_loop} tracks={len(playlist)}")
         if not playlist:
             console.shen(f"No custom tracks for {top}. Game music has the conn.")
@@ -508,8 +549,15 @@ class XiPodEngine:
         segment = PlaybackController.crossfade_segments(outgoing_tail, segment, self.crossfade_ms)
         self._commit_playback(generation, segment)
 
+    def radio_is_active(self):
+        """True when the Radio Mode button currently owns playback."""
+        return bool(self.radio_override and self.current_top == RADIO_MODE_STATE)
+
     def _should_loop(self):
         """Check if the current state has looping enabled."""
+        # Radio Mode overrides looping outright — see switch_state.
+        if self.radio_is_active():
+            return False
         return self._should_loop_for_state(self.current_top)
 
     def _should_loop_for_state(self, state):
@@ -626,6 +674,39 @@ class XiPodEngine:
                 saved = self.current_top
                 self.current_top = None
                 self.switch_state(saved)
+
+    def set_radio_override(self, enabled):
+        """Radio Mode on/off (Avenger only)."""
+        enabled = bool(enabled)
+        if self.radio_override == enabled:
+            return
+        self.radio_override = enabled
+        console.shen(
+            "Resistance Radio is on the air — the Avenger is tuned in."
+            if enabled else
+            "Resistance Radio off. Avenger back to its regular playlist."
+        )
+        self._reload_if_on_avenger()
+
+    def set_radio_source(self, source):
+        """Which folder(s) Radio Mode draws from — see RADIO_SOURCES."""
+        if source == self.radio_source:
+            return
+        self.radio_source = source
+        console.debug(f"Radio source -> {source}")
+        if self.radio_override:
+            self._reload_if_on_avenger()
+
+    def _reload_if_on_avenger(self):
+        """Re-resolve the Avenger playlist so a Radio Mode change is audible
+        immediately. Only reloads when the Avenger is actually the live state:
+        restarting the track you're listening to elsewhere would be a jarring
+        side effect of flipping a switch that doesn't apply there."""
+        if self.current_top != RADIO_MODE_STATE:
+            return
+        saved = self.current_top
+        self.current_top = None
+        self.switch_state(saved)
 
     def set_reverb(self, state_key, enabled):
         key = state_key.lower()

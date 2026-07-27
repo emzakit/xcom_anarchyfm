@@ -17,8 +17,7 @@ That means:
 - ✅ You need **Spotify Premium** (playback control is Premium-only).
 - ✅ The **Spotify desktop app must be open and running** while you play.
 - ✅ Start playing *something* in Spotify once so it becomes the "active device."
-- ❌ It will **not** work through the in-app Web Player (that's for YouTube), and
-  it won't work on a free account.
+- ❌ It won't work on a free account.
 - ⚠️ Your API keys and OAuth tokens are stored **locally** on your PC
   (`xipod_config.json` and `.spotify_cache.json`, both git-ignored). Keep them
   private — treat your Client Secret like a password.
