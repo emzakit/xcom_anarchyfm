@@ -29,9 +29,28 @@ PC while the game's own music gets muted (through MMS). That's the whole trick.
 
 [How to build the executable yourself](https://github.com/emzakit/xcom_anarchyfm/blob/main/BUILDING.md)
 
+## Things to watch out for
+
+The tactical side (combat, explore, geoscape, the victory/defeat stingers,
+cinematic handling) is **beta**. It works most of the time, but it *will* trip
+occasionally: a track overlapping, the wrong mood playing, a beat of awkward
+timing.
+
+If what you really want is a bulletproof full-game soundtrack, you'll be
+happier grabbing a music pack and running it straight through MMS. Think of
+Anarchy Radio FM's combat stuff as "ooh neat" rather than "rock solid."
+
+I made this as a companion to MMS specifically so that you can have the two running at the same time and cover the gaps that this system fails at, it is not a **replacement.**
+
+> **One thing that's not optional:** Anarchy Radio FM is an **add-on to MMS, not a
+> replacement.** The
+> [Music Modding System (MMS)](https://steamcommunity.com/workshop/filedetails/?id=757398474) does the
+> heavy lifting of silencing the game's built-in music, and Anarchy Radio FM leans on it to
+> work at all. **Install and enable MMS first** — nothing here works without it.
+
 ---
 
-## How it actually works
+## Alright, here's how it works
 
 There are two halves, and they gossip through a log file:
 
@@ -264,23 +283,6 @@ below).
 > **[Resistance Radio](https://steamcommunity.com/sharedfiles/filedetails/?id=2863096697)**
 > mod is still on the Workshop and still great — no Python, no setup, just
 > subscribe and go. If Anarchy Radio FM's tinkering isn't your thing, start there.
-
-### The honest heads-up
-
-The tactical side (combat, explore, geoscape, the victory/defeat stingers,
-cinematic handling) is **beta**. It works most of the time, but it *will* trip
-occasionally — a track overlapping, the wrong mood playing, a beat of awkward
-timing. If what you really want is a bulletproof full-game soundtrack, you'll be
-happier grabbing a music pack and running it straight through MMS. Think of
-Anarchy Radio FM's combat stuff as "ooh neat" rather than "rock solid."
-
-I made this as a companion to MMS specifically so that you can have the two running at the same time and cover the gaps that this system fails at, it is not a **replacement.**
-
-> **One thing that's not optional:** Anarchy Radio FM is an **add-on to MMS, not a
-> replacement.** The
-> [Music Modding System (MMS)](https://steamcommunity.com/workshop/filedetails/?id=757398474) does the
-> heavy lifting of silencing the game's built-in music, and Anarchy Radio FM leans on it to
-> work at all. **Install and enable MMS first** — nothing here works without it.
 
 ---
 
