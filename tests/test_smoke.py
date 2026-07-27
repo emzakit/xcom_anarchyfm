@@ -19,7 +19,8 @@ import process_utils
 import settings as settings_mod
 from settings import EngineSettings
 from library import MusicLibrary
-from setup import _import_single_mod, STATE_FOLDERS
+from setup import STATE_FOLDERS
+import addons
 
 _ORIG_PRESETS_PATH = None
 _TMP_PRESETS_DIR = None
@@ -193,36 +194,120 @@ class TestLibrary(unittest.TestCase):
             _reset_user_presets()
 
 
-class TestWorkshopImport(unittest.TestCase):
+class TestMusicAddons(unittest.TestCase):
+    """Workshop packs are discovered and merged in place — never copied."""
 
-    def test_import_case_insensitive_and_traversal_guard(self):
+    @staticmethod
+    def _make_mod(tmp, mod_id, descriptor, files):
+        mod_root = os.path.join(tmp, mod_id)
+        for rel, names in files.items():
+            d = os.path.join(mod_root, *rel.split("/"))
+            os.makedirs(d, exist_ok=True)
+            for n in names:
+                with open(os.path.join(d, n), "wb") as f:
+                    f.write(b"\x00")
+        with open(os.path.join(mod_root, f"{mod_id}_xipod.json"), "w",
+                  encoding="utf-8") as f:
+            json.dump(descriptor, f)
+        return mod_root
+
+    def test_scan_parses_metadata_and_guards_bad_folders(self):
         with tempfile.TemporaryDirectory() as tmp:
-            mod_root = os.path.join(tmp, "12345")
-            os.makedirs(os.path.join(mod_root, "music", "avenger"))
-            with open(os.path.join(mod_root, "music", "avenger", "song.mp3"), "wb") as f:
-                f.write(b"\x00")
-            descriptor = {
+            workshop = os.path.join(tmp, "workshop")
+            os.makedirs(workshop)
+            self._make_mod(workshop, "12345", {
                 "name": "Test Pack",
+                "author": "Someone",
+                "description": "A pack.",
+                "genres": ["Rock", "  Metal  "],          # whitespace trimmed
                 "folders": {
-                    "state_avenger": "music/avenger",       # lowercase key
-                    "STATE_GEOSCAPE": "../../outside",       # traversal attempt
-                    "STATE_NOT_REAL": "music/avenger",       # unknown state
+                    "state_avenger": "music/avenger",      # lowercase key
+                    "STATE_GEOSCAPE": "../../outside",     # traversal attempt
+                    "STATE_NOT_REAL": "music/avenger",     # unknown state
                 },
-            }
-            json_path = os.path.join(mod_root, "test_xipod.json")
-            with open(json_path, "w", encoding="utf-8") as f:
-                json.dump(descriptor, f)
+            }, {"music/avenger": ["song.mp3"]})
 
-            music_folder = os.path.join(tmp, "library")
-            os.makedirs(music_folder)
-            _import_single_mod(json_path, mod_root, music_folder)
+            found = addons.scan(workshop)
+            self.assertEqual(len(found), 1)
+            a = found[0]
+            self.assertEqual(a.id, "12345")
+            self.assertEqual(a.name, "Test Pack")
+            self.assertEqual(a.genres, ["Metal", "Rock"])
+            self.assertTrue(a.enabled)   # absent from map = enabled
 
-            copied = os.path.join(music_folder, "STATE_AVENGER", "song.mp3")
-            self.assertTrue(os.path.isfile(copied))
-            self.assertFalse(os.path.isdir(os.path.join(music_folder, "STATE_NOT_REAL")))
+            # Only the valid, in-bounds state folder survives.
+            self.assertEqual(a.folders_resolved(), ["state_avenger"])
+
+    def test_genres_accept_comma_separated_string(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workshop = os.path.join(tmp, "workshop")
+            os.makedirs(workshop)
+            self._make_mod(workshop, "1", {"name": "P", "genres": "Rock, Funk"},
+                           {"music": ["a.mp3"]})
+            self.assertEqual(addons.scan(workshop)[0].genres, ["Funk", "Rock"])
+
+    def test_enabled_map_disables_and_library_drops_tracks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workshop = os.path.join(tmp, "workshop")
+            os.makedirs(workshop)
+            self._make_mod(workshop, "999", {
+                "name": "Pack", "folders": {"STATE_AVENGER": "music/av"},
+            }, {"music/av": ["addon.mp3"]})
+
+            music = os.path.join(tmp, "library", "STATE_AVENGER")
+            os.makedirs(music)
+            with open(os.path.join(music, "mine.mp3"), "wb") as f:
+                f.write(b"\x00")
+            root = os.path.dirname(music)
+
+            lib = MusicLibrary()
+            lib.load(root, addons=addons.scan(workshop))
+            names = [t["name"] for t in lib.library["state_avenger"]]
+            self.assertEqual(sorted(names), ["addon.mp3", "mine.mp3"])
+            # Nothing was copied into the user's folder.
+            self.assertFalse(os.path.exists(os.path.join(music, "addon.mp3")))
+
+            off = addons.scan(workshop, {"999": False})
+            lib.load(root, addons=off)
+            self.assertEqual([t["name"] for t in lib.library["state_avenger"]],
+                             ["mine.mp3"])
+
+    def test_user_folder_wins_duplicate_filenames(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workshop = os.path.join(tmp, "workshop")
+            os.makedirs(workshop)
+            self._make_mod(workshop, "a1", {
+                "name": "A", "folders": {"STATE_AVENGER": "m"},
+            }, {"m": ["same.mp3"]})
+            self._make_mod(workshop, "b2", {
+                "name": "B", "folders": {"STATE_AVENGER": "m"},
+            }, {"m": ["same.mp3"]})
+
+            music = os.path.join(tmp, "library", "STATE_AVENGER")
+            os.makedirs(music)
+            with open(os.path.join(music, "same.mp3"), "wb") as f:
+                f.write(b"\x00")
+            root = os.path.dirname(music)
+
+            lib = MusicLibrary()
+            lib.load(root, addons=addons.scan(workshop))
+            tracks = lib.library["state_avenger"]
+            self.assertEqual(len(tracks), 1, "duplicate filenames should collapse")
+            self.assertIsNone(tracks[0]["source"], "the user's own file wins")
+
+    def test_enabled_map_round_trips_through_config(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = os.path.join(tmp, "xipod_config.json")
+            with open(cfg, "w", encoding="utf-8") as f:
+                json.dump({"music_folder": "X:/keep"}, f)
+            addons.save_enabled_map(cfg, {"111": False, "222": True})
+            self.assertEqual(addons.load_enabled_map(cfg),
+                             {"111": False, "222": True})
+            with open(cfg, encoding="utf-8") as f:
+                self.assertEqual(json.load(f)["music_folder"], "X:/keep")
 
     def test_state_folders_all_uppercase(self):
-        """Import canonicalizes to upper — folder list must already be upper."""
+        """Descriptors canonicalize to upper — folder list must already be upper."""
         for folder in STATE_FOLDERS:
             self.assertEqual(folder, folder.upper())
 
@@ -527,6 +612,29 @@ class TestSpotifyParsing(unittest.TestCase):
         self.assertEqual(p("spotify:track:xyz"), "")   # tracks aren't contexts
         self.assertEqual(p("just some text"), "")
         self.assertEqual(p(""), "")
+
+    def test_parse_context_uri_rejects_lookalike_hosts(self):
+        """The host is checked after parsing, not as a substring of the URL.
+
+        A substring test accepts any of these; each one embeds the allowed
+        host somewhere it doesn't belong.
+        """
+        import spotify
+        p = spotify.parse_context_uri
+        for bad in (
+            "https://evil.example/open.spotify.com/playlist/abc",
+            "https://open.spotify.com.evil.example/playlist/abc",
+            "https://notspotify.com/playlist/abc",
+            "https://evil.example/?u=open.spotify.com/playlist/abc",
+            "https://open.spotify.com@evil.example/playlist/abc",
+        ):
+            self.assertEqual(p(bad), "", f"should have rejected {bad}")
+
+        # Genuine subdomains still work.
+        self.assertEqual(p("https://open.spotify.com/playlist/abc"),
+                         "spotify:playlist:abc")
+        self.assertEqual(p("https://play.spotify.com/album/abc"),
+                         "spotify:album:abc")
 
 
 class TestSpotifyController(unittest.TestCase):

@@ -6,22 +6,22 @@ import subprocess
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QLabel, QPushButton, QSlider, QTextEdit, QButtonGroup,
-    QSizePolicy, QFileDialog, QMessageBox,
+    QSizePolicy, QFileDialog, QMessageBox, QInputDialog,
     QSystemTrayIcon, QMenu,
 )
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QFont, QTextCursor, QIcon, QAction, QPixmap
 
-from audio_engine import XiPodEngine
+from audio_engine import XiPodEngine, DEFAULT_RADIO_CHUNK_MIN
 from library import RADIO_SOURCE_RADIO, RADIO_SOURCE_STATE, RADIO_SOURCE_BOTH
 from log_watcher import Bridge
-from setup import import_workshop_mods, _create_state_folders
+from setup import discover_addons, save_config, _create_state_folders
 from gui.theme import FONT_FAMILY, PRIMARY, PRIMARY_DIM, ACCENT, STYLESHEET
 from gui.helpers import make_divider, html_escape
 from gui.log_hooks import log_signal
 from gui.options import OptionsDialog
 from gui.effects import EffectsDialog
-from gui.mod_scaffold import scaffold_music_mod
+from gui.mod_scaffold import scaffold_music_mod, safe_mod_name
 import console
 import process_utils
 
@@ -49,6 +49,7 @@ class XiPodWindow(QWidget):
         self._options_dialog = None
         self._effects_dialog = None
         self._spotify_dialog = None
+        self._addons_dialog = None
         self._shutting_down = False
 
         self.setWindowTitle("AFM")
@@ -91,6 +92,7 @@ class XiPodWindow(QWidget):
             ("Music Folder",  self._on_open_music_folder),
             ("Create Mod",    self._on_create_music_mod),
             ("Spotify",       self._on_spotify),
+            ("Music Addons",  self._on_addons),
         ]):
             btn = QPushButton(label)
             btn.setObjectName("panelBtn")
@@ -116,7 +118,9 @@ class XiPodWindow(QWidget):
             "untouched; turn this off and they apply again."
         )
         self._radio_btn.toggled.connect(self._on_radio_mode)
-        panel_grid.addWidget(self._radio_btn, 1, 2)  # row 2, last column
+        # Full width on its own row, directly above the Radio Source buttons —
+        # the two read as one grouped control that way.
+        panel_grid.addWidget(self._radio_btn, 2, 0, 1, 3)
 
         root.addLayout(panel_grid)
 
@@ -349,9 +353,6 @@ class XiPodWindow(QWidget):
             console.warn(f"Log file not found yet: {log_path}")
             console.shen("I'll keep an eye out. XCOM will create it when it launches.")
 
-        if cfg.get("workshop_folder"):
-            import_workshop_mods(cfg)
-
         console.init_file_log(music_path)
 
         console.shen("Calibrating audio subsystems...")
@@ -360,9 +361,12 @@ class XiPodWindow(QWidget):
             music_path, log_path,
             game_config_folder=game_config_folder,
             shuffle=shuffle,
+            addons=discover_addons(cfg),
         )
         self.engine.set_volume(default_vol)
         self.engine.set_crossfade(crossfade_ms)
+        self.engine.set_radio_chunk_minutes(
+            cfg.get("radio_chunk_minutes", DEFAULT_RADIO_CHUNK_MIN))
 
         # Spotify remote control (experimental) — controller reads its own
         # config from xipod_config.json; inert unless the user enables it.
@@ -376,6 +380,8 @@ class XiPodWindow(QWidget):
 
         for key, btn in self._toggle_btns.items():
             btn.setChecked(self.engine.settings.toggles.get(key, False))
+
+        self._restore_radio_state()
 
         console.shen("Patching into XCOM's comms relay...")
         self.bridge = Bridge(log_path, self.engine)
@@ -402,7 +408,7 @@ class XiPodWindow(QWidget):
             self._options_dialog.raise_()
             self._options_dialog.activateWindow()
             return
-        self._options_dialog = OptionsDialog(self.cfg)
+        self._options_dialog = OptionsDialog(self.cfg, engine=self.engine)
         self._options_dialog.setStyleSheet(STYLESHEET)
         self._options_dialog.closed.connect(lambda: setattr(self, '_options_dialog', None))
         self._options_dialog.show()
@@ -435,11 +441,58 @@ class XiPodWindow(QWidget):
             return
         self._set_source_buttons_enabled(checked)
         self.engine.set_radio_override(checked)
+        self._persist_radio_state()
 
     def _on_radio_source(self, button):
         if not self.engine:
             return
         self.engine.set_radio_source(button.property("radioSource"))
+        self._persist_radio_state()
+
+    def _persist_radio_state(self):
+        """Remember the Radio Mode switch and source between sessions."""
+        self.cfg["radio_mode"] = bool(self._radio_btn.isChecked())
+        checked = self._radio_source_group.checkedButton()
+        if checked is not None:
+            self.cfg["radio_source"] = checked.property("radioSource")
+        save_config(self.cfg)
+
+    def _restore_radio_state(self):
+        """Put the Radio Mode controls back where they were left.
+
+        Runs after the engine exists — the toggle handler refuses to engage
+        without one, so restoring earlier would silently snap back to Off.
+        """
+        source = self.cfg.get("radio_source", RADIO_SOURCE_RADIO)
+        for b in self._radio_source_group.buttons():
+            if b.property("radioSource") == source:
+                b.blockSignals(True)
+                b.setChecked(True)
+                b.blockSignals(False)
+                break
+        self.engine.set_radio_source(source)
+
+        was_on = bool(self.cfg.get("radio_mode", False))
+        self._set_source_buttons_enabled(was_on)
+        if was_on:
+            self._radio_btn.setChecked(True)   # fires _on_radio_mode
+            console.shen("Radio Mode restored from your last session.")
+
+    def _on_addons(self):
+        if self._addons_dialog and self._addons_dialog.isVisible():
+            self._addons_dialog.raise_()
+            self._addons_dialog.activateWindow()
+            return
+        if not self.engine:
+            console.warn("Engine not running yet. Music Addons will be available after startup.")
+            return
+        from gui.addons_dialog import AddonsDialog
+        from setup import CONFIG_PATH
+        self._addons_dialog = AddonsDialog(self.engine, CONFIG_PATH)
+        self._addons_dialog.setStyleSheet(STYLESHEET)
+        self._addons_dialog.setWindowIcon(self.windowIcon())
+        self._addons_dialog.closed.connect(lambda: setattr(self, '_addons_dialog', None))
+        self._addons_dialog.show()
 
     def _on_spotify(self):
         if self._spotify_dialog and self._spotify_dialog.isVisible():
@@ -464,24 +517,34 @@ class XiPodWindow(QWidget):
             console.warn("Music folder not found. Set it in Options first.")
 
     def _on_create_music_mod(self):
+        name, ok = QInputDialog.getText(
+            self, "Create Music Addon",
+            "Mod name  (letters, numbers and underscores):",
+            text="MyMusicPack",
+        )
+        if not ok or not name.strip():
+            return
+        safe = safe_mod_name(name)
+        if safe != name.strip():
+            console.warn(f"Name tidied to '{safe}' — Unreal can't use spaces or punctuation.")
+
         folder = QFileDialog.getExistingDirectory(
-            self, "Choose a folder for your music mod project"
+            self, "Where should the mod project go?"
         )
         if not folder:
             return
-        if os.listdir(folder):
-            reply = QMessageBox.question(
-                self, "Folder Not Empty",
-                "This folder already has files in it.\n"
-                "Create the mod structure here anyway?",
-                QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
-            )
-            if reply != QMessageBox.Yes:
-                return
-        scaffold_music_mod(folder)
-        console.shen(f"Music mod scaffolded at: {folder}")
-        console.shen("Drop your audio files into the state folders, Commander.")
-        subprocess.Popen(["explorer", os.path.normpath(folder)])
+
+        try:
+            created = scaffold_music_mod(folder, safe)
+        except Exception as e:
+            console.error(f"Couldn't create the mod project: {e}")
+            QMessageBox.warning(self, "Couldn't create mod project", str(e))
+            return
+
+        console.shen(f"Music addon scaffolded at: {created}")
+        console.shen("Drop your audio into the music/STATE_* folders, then edit "
+                     "the _xipod.json and publish from ModBuddy.")
+        subprocess.Popen(["explorer", os.path.normpath(created)])
 
     # ------------------------------------------------------------ #
     #  Transport + Toggles
@@ -608,6 +671,9 @@ class XiPodWindow(QWidget):
         if self._spotify_dialog:
             self._spotify_dialog.close()
             self._spotify_dialog = None
+        if self._addons_dialog:
+            self._addons_dialog.close()
+            self._addons_dialog = None
         if self.tray:
             self.tray.hide()
         if self.bridge:

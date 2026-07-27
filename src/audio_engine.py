@@ -14,6 +14,7 @@ from library import (
 )
 from settings import EngineSettings
 from playback import PlaybackController
+import decode
 from decode import load_audio
 import console
 import mms_config
@@ -23,6 +24,9 @@ import mms_config
 # commands for the same state see "already playing" and skip,
 # while outputting silence so the game's native music plays through.
 SILENT_DURATION_MS = 30000
+
+# Minutes of a station Radio Mode decodes at a time. See radio_chunk_ms.
+DEFAULT_RADIO_CHUNK_MIN = 10
 
 
 class XiPodEngine:
@@ -77,6 +81,16 @@ class XiPodEngine:
         self.radio_override = False
         self.radio_source = RADIO_SOURCE_RADIO
 
+        # How much of a track Radio Mode decodes before the station "moves on"
+        # and re-tunes. Station rips run to an hour; decoding one whole costs
+        # ~657 MB and ten-plus seconds of silence before the first note.
+        # 0 disables the cap and plays to the end of the file.
+        self.radio_chunk_ms = DEFAULT_RADIO_CHUNK_MIN * 60 * 1000
+
+        # Discovered music addons (Workshop packs). Their tracks are merged
+        # into the library on load and referenced in place — see addons.py.
+        self.addons = []
+
         # Paths for rescan
         self._root_folder = None
         self._game_log_path = None
@@ -85,10 +99,12 @@ class XiPodEngine:
     #  Library Loading
     # ------------------------------------------------------------------ #
 
-    def load_library(self, root_folder, game_log_path, game_config_folder=None, shuffle=True):
+    def load_library(self, root_folder, game_log_path, game_config_folder=None,
+                     shuffle=True, addons=None):
         self._root_folder = root_folder
         self._game_log_path = game_log_path
         self.shuffle = shuffle
+        self.addons = addons or []
 
         # Derive ini path from log path
         ini_path = self._get_ini_path(game_log_path)
@@ -104,7 +120,7 @@ class XiPodEngine:
         else:
             console.warn("No game_config_folder set — MMS config sync skipped.")
 
-        self.library.load(root_folder)
+        self.library.load(root_folder, addons=self.addons)
         self.library.export_ini(game_log_path, self.settings.get_settings_lines())
 
     def rescan(self):
@@ -115,7 +131,7 @@ class XiPodEngine:
         console.shen("Rescanning the music archive, Commander...")
         saved_top = self.current_top
 
-        self.library.load(self._root_folder)
+        self.library.load(self._root_folder, addons=self.addons)
         self.library.export_ini(self._game_log_path, self.settings.get_settings_lines())
 
         if saved_top:
@@ -167,22 +183,27 @@ class XiPodEngine:
         use_radio, use_reverb, fx_params = self.settings.resolve_fx(self.current_top)
         return PlaybackController.apply_effects(segment, use_radio, use_reverb, fx_params)
 
-    def _apply_random_start(self, segment, state, force=False):
-        """Slice from a random position — like tuning into a radio station.
+    def _pick_random_start(self, path, state, force=False):
+        """Choose a random offset to start a track at — like tuning into a
+        station already in progress. Returns 0 for "start from the top".
 
-        Called with force=True for radio mode (always random start).
-        Called without force for normal mode (uses the per-state toggle).
+        Decided BEFORE decoding, from the container's own duration metadata,
+        so decode.load_audio can seek straight there. Deciding afterwards
+        meant decoding the whole file and binning the skipped part, which on
+        an hour-long station rip is hundreds of megabytes of wasted work.
+
+        force=True for radio mode (always random). Otherwise the per-state
+        random-start toggle decides.
         """
         if not force and not self.settings.should_random_start(state):
-            return segment
-        duration_ms = len(segment)
-        if duration_ms < 5000:  # Too short to bother
-            return segment
+            return 0
+        duration_ms = decode.probe_duration_ms(path)
+        if duration_ms < 5000:  # too short to bother (or unknown)
+            return 0
         # Start anywhere in the first 90% (leave at least 10% to play)
-        max_start = int(duration_ms * 0.9)
-        start_ms = random.randint(0, max_start)
+        start_ms = random.randint(0, int(duration_ms * 0.9))
         console.debug(f"Random start: jumping to {start_ms}ms / {duration_ms}ms")
-        return segment[start_ms:]
+        return start_ms
 
     def _get_effective_volume(self):
         """Return combined master * state volume. Called by playback thread."""
@@ -196,12 +217,20 @@ class XiPodEngine:
         state_random=True honors the per-state random-start toggle
         (only wanted on state switches, not on skips/auto-advance).
         """
-        segment = load_audio(track['path'])
-        segment = self._normalize(segment)
+        path = track['path']
         if random_start:
-            segment = self._apply_random_start(segment, self.current_top, force=True)
+            start_ms = self._pick_random_start(path, self.current_top, force=True)
         elif state_random:
-            segment = self._apply_random_start(segment, self.current_top)
+            start_ms = self._pick_random_start(path, self.current_top)
+        else:
+            start_ms = 0
+
+        # The chunk cap only applies to radio playback. A normal track is
+        # expected to play through to its end.
+        max_ms = self.radio_chunk_ms if random_start else 0
+
+        segment = load_audio(path, start_ms=start_ms, max_ms=max_ms)
+        segment = self._normalize(segment)
         return self._process_segment(segment)
 
     def _commit_playback(self, generation, segment, fade_in=False):
@@ -752,6 +781,14 @@ class XiPodEngine:
 
     def set_crossfade(self, ms):
         self.crossfade_ms = max(0, int(ms))
+
+    def set_radio_chunk_minutes(self, minutes):
+        """How long a stretch Radio Mode plays before re-tuning. 0 = no cap."""
+        try:
+            minutes = max(0, int(minutes))
+        except (TypeError, ValueError):
+            minutes = DEFAULT_RADIO_CHUNK_MIN
+        self.radio_chunk_ms = minutes * 60 * 1000
 
     def get_now_playing(self):
         if self.active_playlist and self.playback.is_playing:

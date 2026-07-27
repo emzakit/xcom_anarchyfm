@@ -30,10 +30,10 @@ the Workshop mod download) — the exe does not work without its `_internal`
 sibling.
 
 ```powershell
-Compress-Archive -Path dist\AnarchyRadioFM -DestinationPath dist\AnarchyRadioFM_App_v2.0.0.zip -Force
+Compress-Archive -Path dist\AnarchyRadioFM -DestinationPath dist\AnarchyRadioFM_App_v2.1.0.zip -Force
 ```
 
-Current release: **173.8 MB installed, 72 MB zipped.**
+Current release: **174 MB installed, 72 MB zipped.**
 
 ## Why onedir (not onefile)
 
@@ -100,7 +100,7 @@ appear next to the exe.
 - Supported audio extensions live in **one place**: `AUDIO_EXTENSIONS` in
   `src/library.py`. The scanner and the Workshop importer both use it. If you
   add a format there, update the tables in `music/music_readme.md` and
-  `MODDING_GUIDE.md` to match — and check `src/decode.py` actually reads it
+  `addon_template/MODDING_GUIDE.md` to match — and check `src/decode.py` actually reads it
   (PyAV handles far more than the list advertises).
 
 ## Smoke-testing a build

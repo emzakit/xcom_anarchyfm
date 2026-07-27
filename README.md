@@ -180,7 +180,7 @@ Every state also has a `_LOOP` twin (`STATE_AVENGER_LOOP/`, etc.) for tracks you
 want to loop rather than shuffle through. Leave a folder empty and Anarchy Radio FM just
 steps aside, letting the game's own music play for that screen. The full
 rundown — plus how to package up shareable Workshop music packs — lives in
-**[`MODDING_GUIDE.md`](MODDING_GUIDE.md)** and **[`music/music_readme.md`](music/music_readme.md)**.
+**[`addon_template/MODDING_GUIDE.md`](addon_template/MODDING_GUIDE.md)** and **[`music/music_readme.md`](music/music_readme.md)**.
 
 ---
 
@@ -226,12 +226,17 @@ With Radio Mode on, three buttons decide where the Avenger pulls from:
 **Avenger Only** is the sleeper hit here: it gives your existing Avenger music
 the "tuned in mid-song" treatment without needing a radio folder at all.
 
-- **Off by default**, and not saved between runs — it's a mood you flip on,
-  not a setting to configure.
+- **Off by default**, but once you turn it on it stays on — the switch and
+  your Radio Source choice are remembered between sessions.
 - **It overrides `STATE_AVENGER_LOOP/`.** While Radio Mode is on, the loop
   folder is skipped and the Loop Track setting is ignored — a station that
   replays one track forever isn't a station. Switch Radio Mode off and your
   loop track comes straight back.
+- **Station length** (Options, or the setup wizard): Radio Mode loads a slice
+  at a time rather than a whole file, then re-tunes to a fresh random spot.
+  Hour-long rips would otherwise cost a few hundred MB and a long pause before
+  the first note — 10 minutes gets you playing in about two seconds. Set it to
+  0 to always play tracks to the end.
 - Your per-state **Radio Source checkboxes in Effects are left alone.** Those
   still work on any state, independently of this button, for anyone who wants
   radio content elsewhere.
@@ -256,6 +261,7 @@ buttons, the in-game mod also ships `XiPodPlay` / `XiPodPause` / `XiPodNext` /
   bitcrush, echo), plus loop / random-start switches.
 - **Create Music Mod…** — spins up a ready-to-fill Workshop music-pack project.
 - **Spotify** *(experimental)* — more below.
+- **Music Addons** — turn subscribed Workshop music packs on and off. More below.
 - **Radio Mode** *(+ Radio Source)* — tune the Avenger to a station. More below.
 - It tucks into the system tray while you play. **Close XCOM and the music
   pauses straight away** — then it waits around in case you relaunch from your
@@ -288,6 +294,37 @@ mix and match — Spotify for the base, local tracks for combat, whatever you fa
 The full walkthrough (making the app, grabbing the keys, linking your account) is
 in **[`SPOTIFY_SETUP.md`](SPOTIFY_SETUP.md)**, and there's a **Spotify** button
 in Anarchy Radio FM that opens it all up.
+
+---
+
+## Music Addons — Workshop music packs
+
+<img src="assets/img_addons.png" alt="Music Addons panel" width="520">
+
+Subscribe to a music pack on the Workshop and it just turns up. The **Music
+Addons** button lists everything you're subscribed to, with its author, genre
+tags, description and how many tracks it's contributing — and a switch to turn
+each one on or off.
+
+**Nothing is copied to your drive.** Addon tracks play straight out of the
+workshop folder where Steam put them, mixed in alongside your own music. That's
+deliberate: a station-rip pack can run to gigabytes, and once files are copied
+into your music folder there's no way to tell them apart from your own — so
+there'd be no way to turn a pack back off.
+
+- Sort by name, genre or track count, and filter to a single genre.
+- **Enable all / Disable all** for quickly A/B-ing a new pack.
+- **Save & Rescan** applies changes immediately — no restart.
+- Your own music always wins a filename collision, so a pack can never
+  shadow a track you put there yourself.
+
+### Making your own
+
+Hit **Create Mod**, give it a name, and you get a complete ready-to-publish
+ModBuddy project — solution, project file, Config INIs, DLC class, all fifteen
+`music/STATE_*` folders and a filled-in descriptor. Drop your audio in, edit
+the JSON, publish. Full walkthrough in
+**[`addon_template/MODDING_GUIDE.md`](addon_template/MODDING_GUIDE.md)**.
 
 ---
 
@@ -327,7 +364,7 @@ good at.
 | `requirements.txt` | Python dependencies |
 | `xipod_defaults.json` | Built-in presets, INI defaults, and cinematic timing data |
 | `xipod_config.example.json` | A template for the per-user config |
-| `MODDING_GUIDE.md` | How to build and share music packs |
+| `addon_template/MODDING_GUIDE.md` | How to build and share music packs |
 
 ---
 

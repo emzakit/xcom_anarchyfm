@@ -4,14 +4,14 @@ import os
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QPushButton, QFileDialog,
+    QLabel, QPushButton, QFileDialog, QSpinBox,
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 
 from gui.theme import FONT_FAMILY, PRIMARY, PRIMARY_DIM, PRIMARY_FAINT, AMBER, BORDER
 from gui.helpers import make_divider, path_row
-from setup import save_config, import_workshop_mods, _create_state_folders, _find_game_config_folder
+from setup import save_config, _create_state_folders, _find_game_config_folder
 from setup import find_log_path_silent
 import console
 
@@ -20,9 +20,10 @@ class OptionsDialog(QWidget):
 
     closed = Signal()
 
-    def __init__(self, cfg, parent=None):
+    def __init__(self, cfg, engine=None, parent=None):
         super().__init__(parent)
         self.cfg = cfg
+        self.engine = engine
         self.setWindowTitle("AFM — Options")
         self.setMinimumWidth(580)
         self.setFixedHeight(560)
@@ -73,6 +74,35 @@ class OptionsDialog(QWidget):
             "Where XCOM 2 stores user settings. Anarchy Radio FM writes MMS overrides here.",
             self._browse_folder, cfg.get("game_config_folder", ""),
         )
+
+        # --- Radio Mode chunk length ---
+        root.addSpacing(10)
+        chunk_lbl = QLabel("Radio Mode: minutes before re-tuning")
+        chunk_lbl.setFont(QFont(FONT_FAMILY, 12, QFont.Bold))
+        chunk_lbl.setStyleSheet(f"color: {PRIMARY};")
+        root.addWidget(chunk_lbl)
+
+        chunk_desc = QLabel(
+            "How long a stretch Radio Mode plays before jumping to a fresh "
+            "random spot. Station rips run to an hour; decoding one whole "
+            "costs hundreds of MB and a long pause before the first note. "
+            "Set to 0 to play each track right to its end."
+        )
+        chunk_desc.setWordWrap(True)
+        chunk_desc.setFont(QFont(FONT_FAMILY, 10))
+        chunk_desc.setStyleSheet(f"color: {PRIMARY_DIM};")
+        root.addWidget(chunk_desc)
+
+        chunk_row = QHBoxLayout()
+        self.chunk_spin = QSpinBox()
+        self.chunk_spin.setRange(0, 120)
+        self.chunk_spin.setSuffix(" min")
+        self.chunk_spin.setSpecialValueText("No limit")
+        self.chunk_spin.setValue(int(cfg.get("radio_chunk_minutes", 10)))
+        self.chunk_spin.setFixedWidth(120)
+        chunk_row.addWidget(self.chunk_spin)
+        chunk_row.addStretch()
+        root.addLayout(chunk_row)
 
         root.addStretch()
         root.addWidget(make_divider())
@@ -175,10 +205,13 @@ class OptionsDialog(QWidget):
         self.cfg["log_path"] = log
         self.cfg["workshop_folder"] = workshop
         self.cfg["game_config_folder"] = config_dir
+        self.cfg["radio_chunk_minutes"] = int(self.chunk_spin.value())
         save_config(self.cfg)
 
-        if workshop:
-            import_workshop_mods(self.cfg)
+        # The chunk length applies to the next track Radio Mode loads, so
+        # push it live rather than making it another restart-only setting.
+        if self.engine:
+            self.engine.set_radio_chunk_minutes(self.cfg["radio_chunk_minutes"])
 
         console.shen("Config saved. Restart Anarchy Radio FM for path changes to take effect.")
         self.close()

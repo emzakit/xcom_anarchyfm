@@ -6,7 +6,7 @@ import sys
 
 from audio_engine import XiPodEngine
 from log_watcher import Bridge
-from setup import config_exists, load_config, import_workshop_mods
+from setup import config_exists, load_config, discover_addons
 from setup_gui import run_setup_gui
 import console
 import process_utils
@@ -66,16 +66,15 @@ def main_cli():
         console.warn(f"Game config folder not found: {game_config_folder}")
         console.shen("MMS toggle sync will be skipped until the folder exists.")
 
-    if cfg.get("workshop_folder"):
-        import_workshop_mods(cfg)
-
     console.init_file_log(music_path)
 
     console.shen("Calibrating audio subsystems...")
     engine = XiPodEngine()
-    engine.load_library(music_path, log_path, game_config_folder=game_config_folder, shuffle=shuffle)
+    engine.load_library(music_path, log_path, game_config_folder=game_config_folder,
+                        shuffle=shuffle, addons=discover_addons(cfg))
     engine.set_volume(default_vol)
     engine.set_crossfade(crossfade_ms)
+    engine.set_radio_chunk_minutes(cfg.get("radio_chunk_minutes", 10))
 
     console.shen("Patching into XCOM's comms relay...")
     bridge = Bridge(log_path, engine)

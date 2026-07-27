@@ -59,6 +59,18 @@ BINDABLE_STATES = [
 #  URI parsing
 # ------------------------------------------------------------------ #
 
+def _is_spotify_host(hostname):
+    """True only for spotify.com itself or a genuine subdomain of it.
+
+    The leading dot on the suffix matters: without it, "notspotify.com" would
+    pass an endswith() check.
+    """
+    if not hostname:
+        return False
+    host = hostname.lower().rstrip(".")
+    return host == "spotify.com" or host.endswith(".spotify.com")
+
+
 def parse_context_uri(text):
     """Normalize a playlist/album/artist reference to a Spotify context URI.
 
@@ -78,16 +90,24 @@ def parse_context_uri(text):
             return f"spotify:{parts[1]}:{parts[2]}"
         return ""
 
-    if "open.spotify.com" in text:
+    if "://" in text or text.lower().startswith("www."):
+        # Parse first, THEN check the host. A substring test like
+        # `"open.spotify.com" in text` also accepts
+        # https://evil.example/open.spotify.com/playlist/xyz, because the
+        # allowed host can sit anywhere in the string.
+        url = text if "://" in text else "https://" + text
         try:
-            path = urllib.parse.urlparse(text).path.strip("/").split("/")
-            # e.g. ["playlist", "37i9dQ..."] or ["intl-xx", "playlist", "id"]
-            if len(path) >= 2:
-                kind, pid = path[-2], path[-1]
-                if kind in ("playlist", "album", "artist") and pid:
-                    return f"spotify:{kind}:{pid}"
+            parsed = urllib.parse.urlparse(url)
         except Exception:
             return ""
+        if not _is_spotify_host(parsed.hostname):
+            return ""
+        path = parsed.path.strip("/").split("/")
+        # e.g. ["playlist", "37i9dQ..."] or ["intl-xx", "playlist", "id"]
+        if len(path) >= 2:
+            kind, pid = path[-2], path[-1]
+            if kind in ("playlist", "album", "artist") and pid:
+                return f"spotify:{kind}:{pid}"
         return ""
 
     # Bare id — assume playlist

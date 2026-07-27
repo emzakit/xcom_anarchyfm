@@ -7,7 +7,7 @@ import subprocess
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QLineEdit, QFileDialog,
-    QFrame, QMessageBox, QSizePolicy,
+    QFrame, QMessageBox, QSizePolicy, QSpinBox,
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont, QPixmap
@@ -15,7 +15,7 @@ from PySide6.QtGui import QFont, QPixmap
 from setup import (
     config_exists, load_config, save_config,
     _create_state_folders, _find_game_config_folder,
-    find_log_path_silent, import_workshop_mods,
+    find_log_path_silent,
 )
 # Shared look & feel — one stylesheet for the whole app (see gui/theme.py).
 from gui.theme import STYLESHEET, FONT_FAMILY, PRIMARY, PRIMARY_DIM, AMBER
@@ -42,7 +42,7 @@ class SetupWindow(QWidget):
     def __init__(self, existing_cfg=None):
         super().__init__()
         self.setWindowTitle("AFM Setup")
-        self.setFixedSize(620, 740)
+        self.setFixedSize(620, 900)
         self.result_cfg = None  # set on success
 
         root = QVBoxLayout(self)
@@ -104,7 +104,30 @@ class SetupWindow(QWidget):
             "Where XCOM 2 stores user settings. Anarchy Radio FM writes MMS overrides here."
         ))
         self.config_field = self._path_row(root, "Browse...", self._browse_config)
-        root.addSpacing(20)
+        root.addSpacing(14)
+
+        # --- 5. Radio Mode chunk length ---
+        root.addWidget(self._section_label(
+            "Step 5 — Radio Mode station length",
+            "Radio Mode tunes the Avenger to your STATE_RESISTANCE_RADIO folder "
+            "and starts every track at a random point, like catching a broadcast "
+            "already running. People often fill it with hour-long station rips — "
+            "and loading a whole hour costs a few hundred MB and a pause before "
+            "the first note. This is how big a slice it loads at a time; when the "
+            "slice ends it re-tunes to a fresh random spot. 10 minutes is a good "
+            "default. Set it to 0 to always play tracks to the end."
+        ))
+        chunk_row = QHBoxLayout()
+        self.chunk_spin = QSpinBox()
+        self.chunk_spin.setRange(0, 120)
+        self.chunk_spin.setSuffix(" min")
+        self.chunk_spin.setSpecialValueText("No limit (play to the end)")
+        self.chunk_spin.setValue(int((existing_cfg or {}).get("radio_chunk_minutes", 10)))
+        self.chunk_spin.setFixedWidth(220)
+        chunk_row.addWidget(self.chunk_spin)
+        chunk_row.addStretch()
+        root.addLayout(chunk_row)
+        root.addSpacing(16)
 
         root.addWidget(self._divider())
         root.addSpacing(16)
@@ -308,10 +331,8 @@ class SetupWindow(QWidget):
 
         save_config(cfg)
 
-        # Import workshop mods
-        if workshop_folder:
-            import_workshop_mods(cfg)
-
+        # Music addons aren't imported here any more — they're discovered and
+        # merged when the engine loads the library. See addons.py.
         self.result_cfg = cfg
         self.close()
 

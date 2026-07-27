@@ -74,110 +74,21 @@ def _create_state_folders(music_folder):
 
 
 # ------------------------------------------------------------------ #
-#  Workshop Mod Import
+#  Workshop Music Addons
 # ------------------------------------------------------------------ #
 
-def import_workshop_mods(cfg):
-    """Scan the workshop folder for *_xipod.json descriptors and copy tracks.
+def discover_addons(cfg):
+    """Find the user's subscribed music addons, with their enabled state.
 
-    Descriptors live in each mod's ROOT folder (per the modding guide), so
-    only look one level deep — a full os.walk over thousands of workshop
-    mods made every startup crawl."""
-    workshop = cfg.get("workshop_folder", "")
-    music_folder = cfg.get("music_folder", "")
-    if not workshop or not music_folder:
-        return
-
-    if not os.path.isdir(workshop):
-        return
-
-    found = 0
-    try:
-        mod_dirs = [os.path.join(workshop, d) for d in os.listdir(workshop)]
-    except OSError as e:
-        console.warn(f"Couldn't read workshop folder: {e}")
-        return
-
-    for mod_root in mod_dirs:
-        if not os.path.isdir(mod_root):
-            continue
-        try:
-            files = os.listdir(mod_root)
-        except OSError:
-            continue
-        for fname in files:
-            if fname.lower().endswith("_xipod.json"):
-                json_path = os.path.join(mod_root, fname)
-                try:
-                    _import_single_mod(json_path, mod_root, music_folder)
-                    found += 1
-                except Exception as e:
-                    console.warn(f"Couldn't import {fname}: {e}")
-
-    if found:
-        console.shen(f"Imported {found} community music pack(s).")
-    else:
-        console.faint("No community music packs found in the workshop yet.")
-
-
-def _import_single_mod(json_path, mod_root, music_folder):
-    """Read one _xipod.json descriptor and copy its music into the library.
-
-    Expected JSON format:
-    {
-        "name": "My Music Pack",
-        "author": "SomeModder",
-        "folders": {
-            "STATE_MISSION_EXPLORE": "music/explore",
-            "STATE_MISSION_COMBAT":  "music/combat"
-        }
-    }
-
-    Each key in "folders" is a target state folder name.
-    Each value is a relative path (from the mod root) containing audio files.
+    Replaces the old import_workshop_mods(), which copied every pack's audio
+    into the music folder on startup. Packs are now referenced where they sit
+    and merged at scan time — see addons.py for why.
     """
-    with open(json_path, "r", encoding="utf-8") as f:
-        descriptor = json.load(f)
-
-    mod_name = descriptor.get("name", os.path.basename(json_path))
-    folders = descriptor.get("folders", {})
-    if not folders:
-        return
-
-    console.shen(f"Importing music pack: {mod_name}")
-    copied = 0
-
-    for state_folder, source_sub in folders.items():
-        # Validate target state folder (case-insensitive; use canonical name)
-        canonical = state_folder.strip().upper()
-        if canonical not in STATE_FOLDERS:
-            console.warn(f"  Unknown state folder '{state_folder}' in {mod_name} — skipping.")
-            continue
-
-        src_dir = os.path.normpath(os.path.join(mod_root, source_sub))
-        dst_dir = os.path.join(music_folder, canonical)
-
-        # Descriptor paths must stay inside the mod folder
-        if not src_dir.lower().startswith(os.path.normpath(mod_root).lower()):
-            console.warn(f"  Path outside mod folder '{source_sub}' in {mod_name} — skipping.")
-            continue
-
-        if not os.path.isdir(src_dir):
-            continue
-        if not os.path.isdir(dst_dir):
-            os.makedirs(dst_dir)
-
-        for audio_file in os.listdir(src_dir):
-            if audio_file.lower().endswith(AUDIO_EXTENSIONS):
-                src_path = os.path.join(src_dir, audio_file)
-                dst_path = os.path.join(dst_dir, audio_file)
-                if not os.path.exists(dst_path):
-                    shutil.copy2(src_path, dst_path)
-                    console.faint(f"  + {state_folder}/{audio_file}")
-                    copied += 1
-
-    if copied:
-        console.debug(f"{copied} track(s) added from {mod_name}.")
+    import addons
+    return addons.scan(
+        cfg.get("workshop_folder", ""),
+        addons.load_enabled_map(CONFIG_PATH),
+    )
 
 
 # ------------------------------------------------------------------ #

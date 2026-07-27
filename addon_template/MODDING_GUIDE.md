@@ -83,63 +83,103 @@ All tracks are normalized to 16-bit 44100Hz stereo at runtime. You can use any s
 
 ## Creating a Workshop Music Pack
 
-Workshop music packs let you distribute music via Steam Workshop. Each pack includes a `_xipod.json` descriptor that tells Anarchy Radio FM which audio files go into which state folders.
+Workshop music packs let you distribute music via Steam Workshop. Each pack includes a `_xipod.json` descriptor that tells Anarchy Radio FM which audio files belong to which game states.
 
-### 1. Create the Descriptor File
+### 1. Start from the template
 
-Create a file ending in `_xipod.json` (e.g., `my_pack_xipod.json`) in your mod's root folder:
+**The easy way:** open Anarchy Radio FM and hit **Create Mod**. Give it a name
+and pick a folder, and it stamps out a complete, ready-to-publish ModBuddy
+project — solution file, project file, Config INIs, the DLC class, all fifteen
+`music/STATE_*` folders and a filled-in descriptor. Nothing to wire up
+yourself.
+
+You get:
+
+```
+MyPack_xipod/
+  MyPack_xipod.XCOM_sln
+  MyPack_xipod/
+    MyPack_xipod.json         <- the descriptor
+    MyPack_xipod.x2proj
+    ReadMe.txt
+    Config/                   <- generated INIs
+    Src/MyPack_xipod/Classes/ <- generated DLC class
+    music/
+      STATE_AVENGER/
+      STATE_MISSION_COMBAT/
+      ... (all fifteen)
+```
+
+The descriptor name matters: it must end in **`_xipod.json`** or the app won't
+find it. Because the project is named `<YourName>_xipod`, that falls out
+naturally.
+
+### 2. Fill in the descriptor
 
 ```json
 {
     "name": "My Awesome Music Pack",
     "author": "YourName",
+    "description": "Orchestral covers of 80s rock. Heavy on the Avenger, tense in the field.",
+    "genres": ["Orchestral", "Rock", "Covers"],
     "folders": {
-        "STATE_AVENGER": "music/avenger",
-        "STATE_MISSION_EXPLORE": "music/explore",
-        "STATE_MISSION_COMBAT": "music/combat",
-        "STATE_VICTORY": "music/victory"
+        "STATE_AVENGER": "music/STATE_AVENGER",
+        "STATE_MISSION_EXPLORE": "music/STATE_MISSION_EXPLORE",
+        "STATE_MISSION_COMBAT": "music/STATE_MISSION_COMBAT",
+        "STATE_VICTORY": "music/STATE_VICTORY"
     }
 }
 ```
 
-### 2. Organize Your Audio Files
+`description` and `genres` are optional — older descriptors without them still
+load — but they're worth filling in. Both appear in the app's **Music Addons**
+panel, where players sort and filter their installed packs by genre.
+`genres` accepts a list or a comma-separated string.
 
-Place your audio files in subfolders relative to the mod root, matching the paths in `"folders"`:
+Delete any `folders` entries you're not using; empty folders are simply
+skipped.
 
-```
-YourMod/
-  my_pack_xipod.json
-  music/
-    avenger/
-      chill_base_01.mp3
-      chill_base_02.mp3
-    explore/
-      stealth_ambient.ogg
-    combat/
-      intense_battle.mp3
-    victory/
-      fanfare.mp3
-```
+### 3. Drop your audio in and publish
 
-### 3. How Import Works
+Put files in the `music/STATE_*` folders that match your `folders` map, then
+publish from ModBuddy as normal.
 
-When the user sets their Workshop folder in Anarchy Radio FM setup, the app scans all workshop mod folders for `*_xipod.json` files. For each descriptor found:
+### 4. How Loading Works
 
-1. Reads the `"folders"` mapping
-2. Copies audio files from each source path into the corresponding `STATE_*` folder in the user's music library
-3. Skips files that already exist (won't overwrite user's existing tracks)
+On startup the app scans every workshop mod folder (one level deep) for
+`*_xipod.json` and merges those tracks into the player's library **alongside**
+their own music.
 
-Only recognised audio files are copied — `.mp3`, `.wav`, `.ogg`, `.flac`, `.m4a`, `.opus` and `.wma`. Anything else in the source folders is ignored.
+**Nothing is copied.** Your pack's audio plays straight out of the workshop
+folder where Steam put it. That matters for two reasons:
 
-### 4. Descriptor Reference
+- A station-rip pack can run to gigabytes. Copying would duplicate all of it
+  onto the player's drive.
+- Once copied, files are indistinguishable from the player's own, so there'd be
+  no way to turn a pack back off. Because tracks are referenced, the app's
+  **Music Addons** panel can enable and disable packs freely.
+
+Only recognised audio files are picked up — `.mp3`, `.wav`, `.ogg`, `.flac`,
+`.m4a`, `.opus` and `.wma`. Anything else in the source folders is ignored, so
+cover art and readme files sitting alongside your tracks are harmless.
+
+**Filename collisions:** if two sources offer the same filename for the same
+state, only one survives. The player's own music folder always wins; between
+two packs it resolves alphabetically by pack name. Give your files distinctive
+names (`MyPack_Avenger_01.mp3`, not `track01.mp3`) so yours aren't swallowed by
+someone else's pack.
+
+### 5. Descriptor Reference
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `name` | Yes | Display name for your pack |
+| `name` | Yes | Display name for your pack — shown in the Music Addons panel |
 | `author` | No | Your name/handle |
+| `description` | No | A sentence or two, shown under the name in the panel |
+| `genres` | No | Tags players can sort and filter by, e.g. `["Rock", "Orchestral"]`. A comma-separated string also works |
 | `folders` | Yes | Map of `STATE_*` folder names to relative source paths |
 
-Valid folder keys are any of the state folders listed in the Folder Structure table above (e.g., `STATE_AVENGER`, `STATE_MISSION_COMBAT_LOOP`, `STATE_RESISTANCE_RADIO`, etc.).
+Valid folder keys are any of the state folders listed in the Folder Structure table above (e.g., `STATE_AVENGER`, `STATE_MISSION_COMBAT_LOOP`, `STATE_RESISTANCE_RADIO`, etc.). Keys are case-insensitive; unknown keys and paths pointing outside your mod folder are ignored.
 
 ---
 

@@ -45,18 +45,35 @@ RADIO_SOURCES = (RADIO_SOURCE_RADIO, RADIO_SOURCE_STATE, RADIO_SOURCE_BOTH)
 # ffmpeg. Keep it in sync with the table in music/music_readme.md.
 AUDIO_EXTENSIONS = (".mp3", ".wav", ".ogg", ".flac", ".m4a", ".opus", ".wma")
 
+# The state folders a Workshop addon can ship, upper-cased as they appear on
+# disk. RADIO_STATE is included: a station pack is exactly the sort of thing
+# people want to share.
+STATE_FOLDERS_FOR_MODS = tuple(
+    s.upper() for s in
+    (BASE_STATES + sorted(LOOP_STATES) + STINGER_STATES + [RADIO_STATE])
+)
+
 # Everything the scanner recognises as a valid folder
 ALL_KNOWN = set(BASE_STATES) | LOOP_STATES | set(STINGER_STATES) | {RADIO_STATE}
 
 
-def _scan_audio_files(folder):
-    """Return list of track dicts from a single folder (non-recursive)."""
+def _scan_audio_files(folder, source=None):
+    """Return list of track dicts from a single folder (non-recursive).
+
+    `source` is the addon name the tracks came from, or None for the user's
+    own music folder. It's carried through so the UI can say where a track
+    came from, and so an addon's tracks can be dropped when it's turned off.
+    """
     tracks = []
     if not os.path.isdir(folder):
         return tracks
     for file in sorted(os.listdir(folder)):
         if file.lower().endswith(AUDIO_EXTENSIONS):
-            tracks.append({"name": file, "path": os.path.join(folder, file)})
+            tracks.append({
+                "name": file,
+                "path": os.path.join(folder, file),
+                "source": source,
+            })
     return tracks
 
 
@@ -65,8 +82,12 @@ class MusicLibrary:
         self.library = {}   # key → [track dicts]  (includes _loop keys)
         self.manifest = []
 
-    def load(self, root_folder):
-        """Scan the flat folder structure. Returns total track count."""
+    def load(self, root_folder, addons=None):
+        """Scan the user's music folder, then merge in any enabled addons.
+
+        Addon tracks are referenced where they sit in the workshop folder —
+        nothing is copied. Returns the total track count.
+        """
         self.library = {}
 
         if not os.path.exists(root_folder):
@@ -95,9 +116,47 @@ class MusicLibrary:
                     console.debug(f"{top_key}: {len(tracks)} tracks")
                     total += len(tracks)
 
+        total += self._merge_addons(addons or [])
+
         console.shen(f"Archive loaded. {total} tracks standing by.")
         self._build_manifest()
         return total
+
+    def _merge_addons(self, addons):
+        """Fold each enabled addon's declared folders into the library.
+
+        The user's own music folder is scanned first and wins every collision:
+        if they've dropped in a track with the same filename an addon provides,
+        theirs is the one that plays. Duplicates between addons resolve in
+        scan order (alphabetical by name), which at least makes it stable.
+
+        Filename is the dedupe key rather than the full path, because the
+        realistic collision is the same song shipped by two packs — and
+        because users who ran an older version still have copies of addon
+        tracks sitting in their own folder from back when packs were imported
+        by copying.
+        """
+        added = 0
+        for addon in addons:
+            if not addon.enabled:
+                continue
+            addon.track_count = 0
+            for state_key, src_dir in addon.source_dirs():
+                existing = self.library.setdefault(state_key, [])
+                seen = {t["name"].lower() for t in existing}
+                for track in _scan_audio_files(src_dir, source=addon.name):
+                    if track["name"].lower() in seen:
+                        console.debug(
+                            f"  {addon.name}: '{track['name']}' already in "
+                            f"{state_key} — skipping duplicate.")
+                        continue
+                    seen.add(track["name"].lower())
+                    existing.append(track)
+                    addon.track_count += 1
+                    added += 1
+            if addon.track_count:
+                console.debug(f"addon '{addon.name}': {addon.track_count} tracks")
+        return added
 
     def _build_manifest(self):
         """Build a flat ID-indexed manifest for UI track selection."""

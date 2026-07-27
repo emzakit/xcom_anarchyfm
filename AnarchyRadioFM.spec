@@ -27,6 +27,12 @@ a = Analysis(
         # (source, dest-folder-inside-bundle) — read via paths.resource_path()
         ("xipod_defaults.json", "."),
         ("assets/banner.png", "assets"),
+        # ModBuddy project template stamped out by the Create Mod button.
+        # Tree() keeps the folder structure; .XCOM_suo is ModBuddy's per-user
+        # state and has no business shipping.
+        *[(os.path.join(dp, f), os.path.join("addon_template", os.path.relpath(dp, "addon_template")))
+          for dp, _dn, fn in os.walk(os.path.join("addon_template", "ModName_xipod"))
+          for f in fn if not f.lower().endswith((".xcom_suo", ".user"))],
     ],
     hiddenimports=[],
     hookspath=[],

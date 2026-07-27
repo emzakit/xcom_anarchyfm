@@ -50,7 +50,18 @@ Three buttons decide where the Avenger pulls from:
 [list]
 [*][b]Pro-Tip:[/b] Download some long GTA radio stations (complete with DJ banter and fake ads) and drop them into STATE_RESISTANCE_RADIO/. Every time you return to the Avenger, you'll land mid-song, mid-ad, or mid-DJ ramble!
 [*] Radio Mode overrides the STATE_AVENGER_LOOP/ folder and the Loop Track setting while it's on — otherwise you'd be stuck hearing one track on repeat instead of a station. Switch it off and your loop track comes right back.
-[*] It's off by default, and it leaves your per-state Effects settings alone — switch it back off and everything is exactly as you left it.
+[*] It's off by default, and it leaves your per-state Effects settings alone — switch it back off and everything is exactly as you left it. Once you turn it on it stays on: the switch and your source choice are remembered between sessions.
+[*] Station rips are usually an hour long, so Radio Mode loads a slice at a time (10 minutes by default) and re-tunes to a fresh random spot when it ends. Loading a whole hour costs a few hundred MB and a real pause before the first note. You pick this in the setup wizard and can change it in Options.
+[/list]
+
+[h3]Music Addons[/h3]
+Subscribe to an Anarchy Radio FM music pack on the Workshop and it just turns up in your library, mixed in alongside your own tracks. The [b]Music Addons[/b] button in the desktop app lists everything you're subscribed to — author, genre tags, description, track count — with a switch to turn each one on or off.
+
+[list]
+[*] Nothing is copied to your drive. Pack audio plays straight from the workshop folder, which is what makes the on/off switch possible. A big station pack can be gigabytes; you don't want a second copy of that.
+[*] Sort by name, genre or track count, and filter to a single genre.
+[*] Your own music always wins a filename clash, so a pack can never shadow a track you put there yourself.
+[*] Want to make one? Hit [b]Create Mod[/b] in the app — it stamps out a complete, ready-to-publish ModBuddy project with all the folders and files already wired up.
 [/list]
 
 [h3]Changing Stations[/h3]

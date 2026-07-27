@@ -63,6 +63,15 @@ While Radio Mode is on it **overrides `STATE_AVENGER_LOOP/`** and the Loop
 Track setting — a station that repeats one track forever isn't a station.
 Switch it off and your loop track comes straight back.
 
+The switch and your Radio Source choice are **remembered between sessions**.
+
+**Station length:** Radio Mode loads a slice of a track at a time (10 minutes
+by default) and then re-tunes to a fresh random spot, rather than loading a
+whole file. That keeps hour-long station rips snappy — a full hour is a few
+hundred MB of decoded audio and a noticeable pause before the first note. You
+set this in the first-run wizard, and can change it any time in **Options**;
+set it to 0 to always play tracks to the end.
+
 > **Best thing to try:** grab a long GTA radio station rip — DJ banter, fake
 > adverts, the lot — and drop it in here. An hour-long unbroken mix gives that
 > random start plenty of room to roam, so every trip back to the Avenger lands
@@ -72,6 +81,15 @@ There's also a per-state **Radio Source** checkbox in Effects, which works
 independently of the Radio Mode button if you want radio content on other
 screens.
 
+## Workshop music packs
+
+Music packs you subscribe to on the Workshop are merged into your library
+automatically, alongside whatever's in these folders. Their audio is **not
+copied here** — it plays straight from the workshop folder, which is what lets
+you switch packs on and off from the app's **Music Addons** panel.
+
+If a pack ships a file with the same name as one of yours, **yours wins**.
+
 ## Per-state settings
 
 Everything else — volume, effects presets, reverb, random start, looping — is
@@ -80,5 +98,5 @@ needs configuring beyond dropping files in.
 
 ---
 
-See [`../MODDING_GUIDE.md`](../MODDING_GUIDE.md) for building shareable music
+See [`../addon_template/MODDING_GUIDE.md`](../addon_template/MODDING_GUIDE.md) for building shareable music
 packs you can put on the Steam Workshop.
