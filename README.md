@@ -14,6 +14,9 @@ something loud when the shooting starts. It quietly watches XCOM 2's log, notice
 when the game changes screens, and plays the right tracks from folders on your
 PC while the game's own music gets muted (through MMS). That's the whole trick.
 
+The heart of it is having **your own music on the Avenger and Squad Select**. This is the part that works properly, and it's where the vast majority of the effort went.
+Everything else is a fun bonus that's still finding its feet.
+
 ## Links
 [Grab the latest release](https://github.com/emzakit/xcom_anarchyfm/releases)
 
@@ -279,10 +282,6 @@ just *announce* what it's doing to a log, and let a small external app do the
 actual playing instead of my initial approach. It's not perfect, but it works. That's good enough. The MMS was required to catch the stray states that the app kept missing.
 
 I'm making this open source because everything should be (especially if AI helped out) and also in case one of you XCOM gurus figures out a way to make it work within the Unreal Engine itself and doesn't require an external Python audio player. That's the real dream, but I couldn't quite pull it off. Maybe one of you will.
-
-The heart of it is having **your own music on the Avenger and Squad Select**. This is the part that works properly, and it's where the vast majority of the effort went.
-Everything else is a fun bonus that's still finding its feet (more on that
-below).
 
 > **Just want a no-fuss radio?** The original
 > **[Resistance Radio](https://steamcommunity.com/sharedfiles/filedetails/?id=2863096697)**
