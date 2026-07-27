@@ -78,7 +78,7 @@ take the game down with it. Worst case, Anarchy Radio FM shrugs and skips that o
 
 The default folder to place music in is: `STATE_RESISTANCE_RADIO/`. If you want to use other folders go into Effects and turn off Radio Source.
 
-<img src="img_effects.png" alt="Effects panel">
+<img src="img_effects.png" alt="Effects panel" width="520">
 
 ---
 
@@ -251,7 +251,7 @@ grab it.
 
 ## Spotify per state (experimental — your keys, your risk)
 
-<img src="img_spotify.png" alt="Spotify panel">
+<img src="img_spotify.png" alt="Spotify panel" width="520">
 
 Here's a spicy one: pin a **Spotify playlist to each game state** — a combat
 playlist for combat, something mellow for the Avenger, and so on. It's
