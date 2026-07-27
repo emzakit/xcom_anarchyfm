@@ -38,7 +38,7 @@ Everything else is a fun bonus that's still finding its feet.
 
 [How to build the executable yourself](https://github.com/emzakit/xcom_anarchyfm/blob/main/BUILDING.md)
 
-<img src="img_main_menu.png" alt="Main menu panel">
+<img src="img_main_menu.png" alt="Main menu panel" width="520">
 
 ## Things to watch out for
 
