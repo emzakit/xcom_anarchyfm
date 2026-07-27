@@ -111,7 +111,12 @@ take the game down with it. Worst case, Anarchy Radio FM shrugs and skips that o
 
 ## Getting it running
 
-The lazy (recommended) way is **`launch.bat`**:
+The easy way:
+
+Go to the release page, grab the zip file, unzip it somewhere and launch the .exe:
+https://github.com/emzakit/xcom_anarchyfm/releases
+
+The second (lazy) way is **`launch.bat`**:
 
 1. Install [Python](https://www.python.org/downloads/) — and *do* tick **"Add
    Python to PATH"** on the first screen, it saves a headache.
