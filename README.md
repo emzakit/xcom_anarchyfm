@@ -31,53 +31,6 @@ PC while the game's own music gets muted (through MMS). That's the whole trick.
 
 ---
 
-## A bit of backstory
-
-Anarchy Radio FM is the follow-up to my
-**[Resistance Radio](https://steamcommunity.com/sharedfiles/filedetails/?id=2863096697)**
-mod, and honestly it's been a bit of a saga. I've been poking at this idea for
-**about three years** — basically ever since Resistance Radio came out. The
-dream was always simple: *let people drop in any music they like and have it play
-in the right place.* The problem was XCOM's audio system, which is… let's say
-**deeply reluctant** to cooperate. Every route ran into 60GB SDKs, Wwise
-soundbanks, and giant `.upk` files (15gb was the size of the original mod, not ideal!).
-
-So, I spent time putting my lockdown Python skills to use and eventually got to coding, but I kept hitting a brick wall trying to figure out exactly how to link the two together. 
-
-Then Google Gemini and Claude came along, which suggested a completely different approach: have the game
-just *announce* what it's doing to a log, and let a small external app do the
-actual playing instead of my initial approach which was to use DLL injection (nightmare). It's not perfect, but it works. That's good enough.
-
-I'm making this open source because everything should be (especially if AI helped out) and also in case one of you XCOM gurus figures out a way to make it work within the Unreal Engine itself and doesn't require an external Python audio player. That's the real dream, but I couldn't quite pull it off. Maybe one of you will.
-
-The heart of it is having **your own music on the Avenger and Squad Select**. This is the part that works properly, and it's where the vast majority of the effort went.
-Everything else is a fun bonus that's still finding its feet (more on that
-below).
-
-> **Just want a no-fuss radio?** The original
-> **[Resistance Radio](https://steamcommunity.com/sharedfiles/filedetails/?id=2863096697)**
-> mod is still on the Workshop and still great — no Python, no setup, just
-> subscribe and go. If Anarchy Radio FM's tinkering isn't your thing, start there.
-
-### The honest heads-up
-
-The tactical side (combat, explore, geoscape, the victory/defeat stingers,
-cinematic handling) is **beta**. It works most of the time, but it *will* trip
-occasionally — a track overlapping, the wrong mood playing, a beat of awkward
-timing. If what you really want is a bulletproof full-game soundtrack, you'll be
-happier grabbing a music pack and running it straight through MMS. Think of
-Anarchy Radio FM's combat stuff as "ooh neat" rather than "rock solid."
-
-I made this as a companion to MMS specifically so that you can have the two running at the same time and cover the gaps that this system fails at, it is not a **replacement.**
-
-> **One thing that's not optional:** Anarchy Radio FM is an **add-on to MMS, not a
-> replacement.** The
-> [Music Modding System (MMS)](https://steamcommunity.com/workshop/filedetails/?id=757398474) does the
-> heavy lifting of silencing the game's built-in music, and Anarchy Radio FM leans on it to
-> work at all. **Install and enable MMS first** — nothing here works without it.
-
----
-
 ## How it actually works
 
 There are two halves, and they gossip through a log file:
@@ -281,6 +234,53 @@ mix and match — Spotify for the base, local tracks for combat, whatever you fa
 The full walkthrough (making the app, grabbing the keys, linking your account) is
 in **[`SPOTIFY_SETUP.md`](SPOTIFY_SETUP.md)**, and there's a **Spotify** button
 in Anarchy Radio FM that opens it all up.
+
+---
+
+## A bit of backstory
+
+Anarchy Radio FM is the follow-up to my
+**[Resistance Radio](https://steamcommunity.com/sharedfiles/filedetails/?id=2863096697)**
+mod, and honestly it's been a bit of a saga. I've been poking at this idea for
+**about three years** — basically ever since Resistance Radio came out. The
+dream was always simple: *let people drop in any music they like and have it play
+in the right place.* The problem was XCOM's audio system, which is… let's say
+**deeply reluctant** to cooperate. Every route ran into 60GB SDKs, Wwise
+soundbanks, and giant `.upk` files (15gb was the size of the original mod, not ideal!).
+
+So, I spent time putting my lockdown Python skills to use and eventually got to coding, but I kept hitting a brick wall trying to figure out exactly how to link the two together. I don't have many nice words for trying to create a DLL injection, so I'll just curse it quietly.
+
+Then Google Gemini and Claude came along, which suggested a super easy approach: have the game
+just *announce* what it's doing to a log, and let a small external app do the
+actual playing instead of my initial approach. It's not perfect, but it works. That's good enough. The MMS was required to catch the stray states that the app kept missing.
+
+I'm making this open source because everything should be (especially if AI helped out) and also in case one of you XCOM gurus figures out a way to make it work within the Unreal Engine itself and doesn't require an external Python audio player. That's the real dream, but I couldn't quite pull it off. Maybe one of you will.
+
+The heart of it is having **your own music on the Avenger and Squad Select**. This is the part that works properly, and it's where the vast majority of the effort went.
+Everything else is a fun bonus that's still finding its feet (more on that
+below).
+
+> **Just want a no-fuss radio?** The original
+> **[Resistance Radio](https://steamcommunity.com/sharedfiles/filedetails/?id=2863096697)**
+> mod is still on the Workshop and still great — no Python, no setup, just
+> subscribe and go. If Anarchy Radio FM's tinkering isn't your thing, start there.
+
+### The honest heads-up
+
+The tactical side (combat, explore, geoscape, the victory/defeat stingers,
+cinematic handling) is **beta**. It works most of the time, but it *will* trip
+occasionally — a track overlapping, the wrong mood playing, a beat of awkward
+timing. If what you really want is a bulletproof full-game soundtrack, you'll be
+happier grabbing a music pack and running it straight through MMS. Think of
+Anarchy Radio FM's combat stuff as "ooh neat" rather than "rock solid."
+
+I made this as a companion to MMS specifically so that you can have the two running at the same time and cover the gaps that this system fails at, it is not a **replacement.**
+
+> **One thing that's not optional:** Anarchy Radio FM is an **add-on to MMS, not a
+> replacement.** The
+> [Music Modding System (MMS)](https://steamcommunity.com/workshop/filedetails/?id=757398474) does the
+> heavy lifting of silencing the game's built-in music, and Anarchy Radio FM leans on it to
+> work at all. **Install and enable MMS first** — nothing here works without it.
 
 ---
 
