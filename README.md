@@ -116,7 +116,10 @@ The lazy (recommended) way is **`launch.bat`**:
 1. Install [Python](https://www.python.org/downloads/) — and *do* tick **"Add
    Python to PATH"** on the first screen, it saves a headache.
 2. Grab this repo (download the ZIP or clone it).
-3. Double-click **`launch.bat`**.
+```bash
+git clone https://github.com/emzakit/xcom_anarchyfm.git
+```
+3. Navigate to the folder and use **`launch.bat`**.
 
 First time through, `launch.bat` quietly sets up a virtual environment, installs
 what it needs, and opens Anarchy Radio FM. After that it just launches straight away.
