@@ -6,7 +6,7 @@
 
 **Replace the soundtrack of XCOM 2 with your own music.**
 
-http://steamcommunity.com/sharedfiles/filedetails/?id=3772839338
+https://steamcommunity.com/sharedfiles/filedetails/?id=3772839338
 
 Anarchy Radio FM is a little desktop app that plays your own `.mp3` / `.ogg` / `.wav` files
 in sync with the game — title music on the menu, chill tunes on the Avenger,
