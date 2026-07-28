@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/AnarchyFM.png" alt="Anarchy Radio FM" width="520">
+  <img src="assets/git_banner.png" alt="Anarchy Radio FM" width="520">
 </p>
 
 # Anarchy Radio FM
