@@ -24,12 +24,12 @@
 
 <p align="center">
   <a href="https://youtu.be/y4coRhi1n3w">
-    <img src="https://img.youtube.com/vi/y4coRhi1n3w/maxresdefault.jpg" alt="Watch Anarchy Radio FM in action" width="640">
+    <img src="assets/youtube_video.png" alt="Watch Anarchy Radio FM in action" width="640">
   </a>
 </p>
 
 <p align="center">
-  <a href="https://youtu.be/y4coRhi1n3w"><strong>▶&nbsp; Watch it in action</strong></a>
+  <a href="https://youtu.be/y4coRhi1n3w"><strong>Watch me in action</strong></a>
 </p>
 
 ---
@@ -49,23 +49,19 @@ I'm making this open source because everything should be (especially if AI helps
 The heart of it is having **your own music on the Avenger and Squad Select**. This is the part that works properly, and it's where the vast majority of the effort went.
 Everything else is a fun bonus that's still finding its feet.
 
-<p align="center">
-  <img src="assets/img_main_menu.png" alt="The Anarchy Radio FM control panel" width="520">
-</p>
-
 ## Quick links
 
-|   | |
-|---|---|
-| 📥 | **[Download the latest release](https://github.com/emzakit/xcom_anarchyfm/releases/latest)** |
-| 🎮 | **[Subscribe on the Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3772839338)** — required |
-| 🎼 | [Music Modding System](https://steamcommunity.com/workshop/filedetails/?id=757398474) — required |
-| 🚀 | [Alternative Mod Launcher](https://github.com/X2CommunityCore/xcom2-launcher) — recommended |
-| 📂 | [How to use the music folders](music/music_readme.md) |
-| 🎧 | [How to set up Spotify](SPOTIFY_SETUP.md) |
-| 🛠️ | [How to make your own music pack](addon_template/MODDING_GUIDE.md) |
-| 🔨 | [How to build the executable yourself](BUILDING.md) |
-| 📝 | [Changelog](CHANGELOG.md) |
+|     |                                                                                                                     |
+| :-- | :------------------------------------------------------------------------------------------------------------------ |
+| 📥  | **[Download the latest release](https://github.com/emzakit/xcom_anarchyfm/releases/latest)**                        |
+| 🎮  | **[Subscribe on the Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3772839338)** — required |
+| 🎼  | [Music Modding System](https://steamcommunity.com/workshop/filedetails/?id=757398474) — required                    |
+| 🚀  | [Alternative Mod Launcher](https://github.com/X2CommunityCore/xcom2-launcher) — recommended                         |
+| 📂  | [How to use the music folders](music/music_readme.md)                                                               |
+| 🎧  | [How to set up Spotify](SPOTIFY_SETUP.md)                                                                           |
+| 🛠️ | [How to make your own music pack](addon_template/MODDING_GUIDE.md)                                                  |
+| 🔨  | [How to build the executable yourself](BUILDING.md)                                                                 |
+| 📝  | [Changelog](CHANGELOG.md)                                                                                           |
 
 ## Contents
 
@@ -113,6 +109,10 @@ I made this as a companion to MMS specifically so that you can have the two runn
 
 ## Alright, here's how it works
 
+<p align="center">
+  <img src="assets/img_main_menu.png" alt="The Anarchy Radio FM control panel" width="360">
+</p>
+
 There are two halves, and they gossip through a log file:
 
 1. **The in-game mod** (a tiny companion Workshop item) watches XCOM's screens
@@ -131,7 +131,9 @@ into the **per-state folders** (`STATE_AVENGER/`, `STATE_GEOSCAPE/`, …) so eac
 screen gets its own music, or put everything in **`STATE_RESISTANCE_RADIO/`**
 and run it as one station with the **Radio Mode** button. More on that below.
 
-<img src="assets/img_effects.png" alt="Effects panel" width="520">
+<p align="center">
+	<img src="assets/img_effects.png" alt="Effects panel" width="360">
+</p>
 
 ---
 
@@ -324,7 +326,9 @@ buttons, the in-game mod also ships `XiPodPlay` / `XiPodPause` / `XiPodNext` /
 
 ## Spotify per state (experimental — your keys, your risk)
 
-<img src="assets/img_spotify.png" alt="Spotify panel" width="520">
+<p align="center">
+<img src="assets/img_spotify.png" alt="Spotify panel" width="360">
+</p>
 
 Here's a spicy one: pin a **Spotify playlist to each game state** — a combat
 playlist for combat, something mellow for the Avenger, and so on. It's
@@ -352,7 +356,9 @@ in Anarchy Radio FM that opens it all up.
 
 ## Music Addons — Workshop music packs
 
-<img src="assets/img_addons.png" alt="Music Addons panel" width="520">
+<p align="center">
+<img src="assets/img_addons.png" alt="Music Addons panel" width="360">
+</p>
 
 If someone decides to make a music addon for this, you will be able to subscribe to a music pack on the Workshop and it just turns up. The **Music
 Addons** button lists everything you're subscribed to, with its author, genre
