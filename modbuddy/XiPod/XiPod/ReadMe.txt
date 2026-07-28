@@ -50,7 +50,7 @@ Before v2.3 that was genuinely a coin flip — MMS picks at random between two t
 
 Empty folders = MMS music. No MMS pack either = the in-game soundtrack, if you have the fallback option turned on in MMS.
 
-Rare exception: a few packs are built the same stubborn way this mod is, and when two of those want the same screen, the game just picks one at random each time you play. You'd notice it as a screen that plays your music some sessions and the pack's music others. Fix is easy — switch that screen off in the app and the pack keeps it for good.
+Rare exception: some music packs are as insistent as this mod is. If your folder and the pack both have music for the same place — the Avenger, say — XCOM picks one of them when it starts up, so you might hear yours one session and the pack's the next. If that happens, turn off that one toggle in the app (the Avenger toggle, in this example) and the pack will have it every time.
 
 [hr][/hr]
 [h2]How you organise it[/h2]

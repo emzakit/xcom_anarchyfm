@@ -158,10 +158,10 @@ The **Avenger and Squad Select** are the polished bits I actually stand behind �
 that's where the effort went. The **tactical side is beta** and trips
 occasionally: an overlap, the wrong mood, awkward timing.
 
-Running an **MMS music pack alongside this** works properly as of v2.3 — put
-music on the screens you care about and the pack keeps everything else. Rarely,
-a screen will play your music one session and the pack's the next; switch that
-screen off in the app and the pack keeps it for good.
+Running an **MMS music pack alongside this** works properly as of v2.3 — fill
+the folders you care about and the pack covers everything else. Rarely, one
+place will play your music one session and the pack's the next; turn off that
+toggle in the app and the pack has it every time.
 
 **[Known issues →](https://github.com/emzakit/xcom_anarchyfm/wiki/Troubleshooting#known-issues)**
 
