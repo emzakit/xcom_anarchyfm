@@ -37,8 +37,11 @@ SCOPES = "user-modify-playback-state user-read-playback-state"
 
 DEFAULT_REDIRECT = "http://127.0.0.1:8888/callback"
 
-# Spotify tends to launch at full blast; start states here unless changed.
-DEFAULT_VOLUME = 60
+# Spotify tends to launch at full blast, so this is a ceiling rather than a
+# target. 60 turned out to be too far down — Spotify sits noticeably quieter
+# than the local engine at the same nominal level, so it got lost under the
+# game. 80 matches it much more closely.
+DEFAULT_VOLUME = 80
 
 # The game states a playlist can be bound to (top-level state strings, as
 # emitted by the engine). Explore and combat are kept separate here so you

@@ -49,6 +49,9 @@
     <Content Include="Src\AnarchyRadioFM\Classes\X2DownloadableContentInfo_AnarchyRadioFM.uc">
       <SubType>Content</SubType>
     </Content>
+    <Content Include="Src\AnarchyRadioFM\Classes\XiPod_CinematicWatcher.uc">
+      <SubType>Content</SubType>
+    </Content>
     <Content Include="Src\AnarchyRadioFM\Classes\XiPod_MCMListener.uc">
       <SubType>Content</SubType>
     </Content>
@@ -56,6 +59,9 @@
       <SubType>Content</SubType>
     </Content>
     <Content Include="Src\AnarchyRadioFM\Classes\XiPod_UI.uc">
+      <SubType>Content</SubType>
+    </Content>
+    <Content Include="Src\AnarchyRadioFM\Classes\XiPod_UISL_Cinematic.uc">
       <SubType>Content</SubType>
     </Content>
     <Content Include="Src\AnarchyRadioFM\Classes\XiPod_UISL_EdgeTab.uc">

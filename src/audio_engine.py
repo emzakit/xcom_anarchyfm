@@ -9,7 +9,7 @@ from pydub import AudioSegment
 # STINGER_STATES (victory/defeat: play once, no loop, no advance) is defined
 # in library.py alongside the other state-folder lists — single source of truth.
 from library import (
-    MusicLibrary, STINGER_STATES,
+    MusicLibrary, STINGER_STATES, BASE_STATES,
     RADIO_MODE_STATE, RADIO_SOURCE_RADIO,
 )
 from settings import EngineSettings
@@ -18,6 +18,7 @@ import decode
 from decode import load_audio
 import console
 import mms_config
+import mms_packs
 
 # Duration of silence played when a state's toggle is OFF.
 # Keeps the engine "active" (is_playing=True) so repeated STATE_
@@ -94,6 +95,9 @@ class XiPodEngine:
         # Paths for rescan
         self._root_folder = None
         self._game_log_path = None
+        self._game_config_folder = None
+        self._workshop_folder = None
+        self._mod_config_folders = []
 
         # Debounced settings write-back (see _persist_settings).
         self._persist_lock = threading.Lock()
@@ -104,9 +108,19 @@ class XiPodEngine:
     # ------------------------------------------------------------------ #
 
     def load_library(self, root_folder, game_log_path, game_config_folder=None,
-                     shuffle=True, addons=None):
+                     shuffle=True, addons=None, workshop_folder=None,
+                     mod_config_folders=None):
         self._root_folder = root_folder
         self._game_log_path = game_log_path
+        self._game_config_folder = game_config_folder
+        # Used to spot other people's MMS packs, and to find our own installed
+        # mod folder — which is the only place MMS reads our config from.
+        self._workshop_folder = workshop_folder
+        # Escape hatch for installs the workshop folder can't describe, such
+        # as a local ModBuddy build.
+        if isinstance(mod_config_folders, str):
+            mod_config_folders = [mod_config_folders]
+        self._mod_config_folders = [p for p in (mod_config_folders or []) if p]
         self.shuffle = shuffle
         self.addons = addons or []
 
@@ -115,17 +129,77 @@ class XiPodEngine:
         if ini_path:
             self.settings.load_from_ini(ini_path)
 
-        # Sync MMS config files based on toggle states.
+        self.library.load(root_folder, addons=self.addons)
+        self.library.export_ini(game_log_path, self.settings.get_settings_lines())
+
+        # Sync MMS config files. This runs AFTER the scan so a state whose
+        # folder turned out to be empty can be left unsilenced for MMS to
+        # cover, rather than silenced into dead air.
         # Writes to the game's user Config dir (Documents/my games/...),
         # NOT the mod folder (Steam overwrites that on updates).
-        # This runs BEFORE the game reads ini, so disabled states let MMS play.
         if game_config_folder:
-            mms_config.sync_ini_files(self.settings.toggles, config_folder=game_config_folder)
+            self.sync_mms_config(config_folder=game_config_folder)
         else:
             console.warn("No game_config_folder set — MMS config sync skipped.")
 
-        self.library.load(root_folder, addons=self.addons)
-        self.library.export_ini(game_log_path, self.settings.get_settings_lines())
+    def _toggle_keys_with_tracks(self):
+        """Which toggle keys currently resolve to playable audio.
+
+        Resolution goes through the library the same way switch_state would
+        ask for it — loop folders, radio sources and all — so the answer
+        matches what would really play rather than what the folder layout
+        hints at. A state that comes back empty is left to MMS.
+        """
+        found = {}
+        for state in list(BASE_STATES) + list(STINGER_STATES):
+            key = self.settings.get_toggle_key(state)
+            if not key or found.get(key):
+                continue
+            if self.radio_override and state == RADIO_MODE_STATE:
+                playlist = self.library.resolve_radio_playlist(state, self.radio_source)
+            else:
+                playlist = self.library.resolve_playlist(
+                    state,
+                    use_loop=self._should_loop_for_state(state),
+                    use_radio=self.settings.is_radio_mode(state),
+                )
+            found[key] = bool(playlist)
+        return found
+
+    def sync_mms_config(self, config_folder=None):
+        """Rewrite the MMS ini files for the current toggles and library."""
+        try:
+            has_tracks = self._toggle_keys_with_tracks()
+        except Exception as e:
+            # Never let a resolution hiccup stop the sync — falling back to
+            # toggles alone is the old behaviour, which is still correct for
+            # everyone whose folders aren't empty.
+            console.warn(f"Track-presence check failed, syncing on toggles alone: {e}")
+            has_tracks = None
+
+        # Other people's MMS music packs, so we can settle who owns each
+        # screen instead of leaving it to MMS's coin flip.
+        try:
+            pack_defs = mms_packs.find_pack_defs(self._workshop_folder,
+                                                 config_folder or self._game_config_folder)
+        except Exception as e:
+            console.warn(f"MMS pack scan failed, leaving pack music as-is: {e}")
+            pack_defs = None
+
+        # Where MMS actually reads from. Without at least one of these the
+        # silencing does nothing at all, however correct the content is.
+        try:
+            mod_dirs = mms_packs.find_own_config_dirs(self._workshop_folder,
+                                                      self._mod_config_folders)
+        except Exception as e:
+            console.warn(f"Couldn't locate our mod's config folder: {e}")
+            mod_dirs = []
+
+        mms_config.sync_ini_files(self.settings.toggles,
+                                  config_folder=config_folder,
+                                  has_tracks=has_tracks,
+                                  pack_defs=pack_defs,
+                                  mod_config_dirs=mod_dirs)
 
     def rescan(self):
         """Re-scan the music library. Preserves current state and settings."""
@@ -137,6 +211,10 @@ class XiPodEngine:
 
         self.library.load(self._root_folder, addons=self.addons)
         self.library.export_ini(self._game_log_path, self.settings.get_settings_lines())
+
+        # Dropping the last track out of a folder (or adding the first one
+        # back) changes who should be covering that state next launch.
+        self.sync_mms_config()
 
         if saved_top:
             self.current_top = None
@@ -735,7 +813,7 @@ class XiPodEngine:
             return
 
         # Rewrite MMS ini files so the change takes effect on next game launch
-        mms_config.sync_ini_files(self.settings.toggles)
+        self.sync_mms_config()
         self._persist_settings()
 
         if not enabled:

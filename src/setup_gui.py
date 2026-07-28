@@ -15,8 +15,9 @@ from PySide6.QtGui import QFont, QPixmap
 from setup import (
     config_exists, load_config, save_config,
     _create_state_folders, _find_game_config_folder,
-    find_log_path_silent,
+    find_log_path_silent, find_workshop_folder,
 )
+import mms_packs
 # Shared look & feel — one stylesheet for the whole app (see gui/theme.py).
 from gui.theme import STYLESHEET, FONT_FAMILY, PRIMARY, PRIMARY_DIM, AMBER
 
@@ -92,8 +93,9 @@ class SetupWindow(QWidget):
 
         # --- 3. Workshop Folder ---
         root.addWidget(self._section_label(
-            "Step 3 — Workshop Folder  (optional)",
-            "For community music packs.  <Steam>\\steamapps\\workshop\\content\\268500"
+            "Step 3 — Workshop Folder",
+            "Needed to find the installed mod — without it the game's own music "
+            "won't be silenced.  <Steam>\\steamapps\\workshop\\content\\268500"
         ))
         self.workshop_field = self._path_row(root, "Browse...", self._browse_workshop)
         root.addSpacing(14)
@@ -172,6 +174,13 @@ class SetupWindow(QWidget):
             self.music_field.setText(existing_cfg.get("music_folder", ""))
             self.workshop_field.setText(existing_cfg.get("workshop_folder", ""))
             self.config_field.setText(existing_cfg.get("game_config_folder", ""))
+
+        # Auto-detect the workshop folder if not pre-filled. It's required
+        # now, so filling it in beats making the user go hunting for it.
+        if not self.workshop_field.text().strip():
+            auto_ws = find_workshop_folder(self.exe_field.text().strip())
+            if auto_ws:
+                self.workshop_field.setText(os.path.normpath(auto_ws))
 
         # Auto-detect config folder if not pre-filled
         if not self.config_field.text().strip():
@@ -303,10 +312,30 @@ class SetupWindow(QWidget):
         # Create state subfolders
         _create_state_folders(music_folder)
 
-        # Validate workshop (optional)
-        if workshop_folder and not os.path.isdir(workshop_folder):
+        # Validate workshop. Required: it's how we reach the installed mod's
+        # own Config folder, which is the only place MMS reads our silencing
+        # from. Get this wrong and everything appears to work while the game's
+        # music plays straight over the top.
+        if not workshop_folder:
+            workshop_folder = find_workshop_folder(game_exe)
+            if workshop_folder:
+                self.workshop_field.setText(os.path.normpath(workshop_folder))
+
+        if not workshop_folder:
+            self._flash("SHEN:  I need the Workshop folder — it's how I find the "
+                        "installed mod. Without it the game's music won't be silenced.")
+            return
+        if not os.path.isdir(workshop_folder):
             self._flash(f"SHEN:  Workshop folder not found:  {workshop_folder}")
             return
+
+        # The folder existing isn't the point — reaching our own mod through
+        # it is. Warn rather than block: a first-time setup can legitimately
+        # run before the mod has finished downloading.
+        if not mms_packs.find_own_config_dirs(workshop_folder):
+            self._flash("SHEN:  Found the folder, but not the Anarchy Radio FM mod "
+                        "inside it. Subscribe to the mod (or set mod_config_folder) "
+                        "or the game's music will play over yours.")
 
         # Find log path
         log_path = find_log_path_silent()

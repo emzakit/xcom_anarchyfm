@@ -1,11 +1,57 @@
 """Anarchy Radio FM Log Watcher — monitors XCOM 2 log file for commands."""
 
 import json
+import re
 import time
 import os
 import threading
 import console
 import process_utils
+
+
+# Every log line carries the engine's own clock. Reading ordering and
+# duration off that instead of off when Python happened to notice the line
+# matters because the log is buffered and a cinematic logs NOTHING while it
+# runs — so a whole cinematic can land in a single read, long after it played.
+_ENGINE_TIME_RE = re.compile(r"^\[(\d+\.\d+)\]")
+
+# "Movie Finished Event: CIN_Name, <seconds played>, <full runtime>"
+_MOVIE_FINISHED_RE = re.compile(
+    r"Movie Finished Event:\s*([^,]+?)\s*,\s*([\d.]+)\s*,\s*([\d.]+)"
+)
+
+# How long to wait after a cinematic before resuming. Avenger facility
+# flyovers chain back to back with only 2.3–3.8s between one ending and the
+# next starting, so a shorter delay just blips the music on between films.
+_POST_CINEMATIC_RESUME_DELAY = 4.5
+
+# A single read covering more than this much engine time means the game had
+# been holding those lines. Below it, ordinary poll jitter.
+_FLUSH_SPAN_WARN = 1.0
+
+# Ceiling on a mod-driven cinematic lock. CINE_OFF normally releases it, but
+# if the game crashes mid-film or the watcher actor dies with the map, this
+# stops the music being muted for the rest of the session. Longer than the
+# longest cinematic in the game (204s) with room to spare.
+_UC_CINEMATIC_SAFETY = 300.0
+
+# Name recorded for a lock the mod told us about rather than one we inferred
+# from a Movie event. Keeps the two paths distinguishable in the logs.
+_UC_CINEMATIC = "mod watcher"
+
+
+def _engine_time(line):
+    """Seconds since engine start, read from the line's own timestamp."""
+    m = _ENGINE_TIME_RE.match(line)
+    return float(m.group(1)) if m else None
+
+
+def _normalise_cin(raw):
+    """Trim whitespace and any file extension off a cinematic name."""
+    raw = raw.strip()
+    if "." in raw:
+        raw = raw.rsplit(".", 1)[0]
+    return raw
 
 
 # Cinematic durations and transition list — loaded from xipod_defaults.json
@@ -49,12 +95,18 @@ def load_cinematic_defaults():
 
 
 class Bridge:
-    def __init__(self, log_path, audio_engine):
+    def __init__(self, log_path, audio_engine, debug_flush=False):
         self.log_path = log_path
         self.audio_engine = audio_engine
         self.last_position = 0
         self.is_running = False
         self.thread = None
+
+        # Diagnostic for one specific question: does the game's log reach disk
+        # promptly, or does it sit in a buffer? It decides whether a cinematic
+        # can be caught while it plays or only after it ends. Off by default —
+        # see _report_flush.
+        self.debug_flush = debug_flush
 
         # Load cinematic durations from xipod_defaults.json
         load_cinematic_defaults()
@@ -66,11 +118,18 @@ class Bridge:
         self._cinematic_lock_set_at = 0.0  # when the lock was engaged
         self._cinematic_safety_timer = None # threading.Timer backup
         self._active_cinematic = None      # name of current cinematic
-        # Minimum time a lock must be held before "Movie Finished" can
-        # clear it. Stale/buffered events arrive at ~0.0s (same log batch
-        # as Movie Started) and are discarded. Real player skips need at
-        # least 2s of reaction time, so this threshold is safe.
-        self._CINEMATIC_MIN_LOCK = 2.0
+        # Last (cinematic key, engine timestamp) we acted on. The engine
+        # emits some "Movie Finished" events twice against the same engine
+        # timestamp, and the duplicate carries a raw clock reading in the
+        # elapsed field rather than a duration — so it can't be filtered on
+        # value, only on identity.
+        self._last_finished = (None, None)
+
+        # True while the mod's own cinematic watcher says a film is up. It
+        # sees a cinematic coming before the script thread blocks, so when it
+        # is talking to us its word beats anything we could infer from the
+        # game's Movie events — which by then are already late.
+        self._uc_cinematic = False
 
         self._dispatch = {
             "VOLUME":         self._cmd_volume,
@@ -85,6 +144,9 @@ class Bridge:
             "SAVEPRESET":     self._cmd_save_preset,
             "CLEARPRESET":    self._cmd_clear_preset,
             "RESCAN":         self._cmd_rescan,
+            "CINE_ON":        self._cmd_cine_on,
+            "CINE_OFF":       self._cmd_cine_off,
+            "CINE_WATCH":     self._cmd_cine_watch,
             "PLAY_ID":        self._cmd_play_id,
             "PLAY":           self._cmd_play,
             "PAUSE":          self._cmd_pause,
@@ -163,9 +225,18 @@ class Bridge:
                         new_lines = f.readlines()
                         self.last_position = f.tell()
 
-                        for line in new_lines:
+                        # Processed as a batch, not line by line: a cinematic
+                        # writes nothing to the log while it plays, so its
+                        # "Movie Started" and "Movie Finished" routinely reach
+                        # us together in one read. Seeing the rest of the batch
+                        # is what lets us tell "a cinematic is running now" from
+                        # "a cinematic already came and went".
+                        batch = [line.strip() for line in new_lines]
+                        if self.debug_flush:
+                            self._report_flush(batch)
+                        for i, line in enumerate(batch):
                             try:
-                                self._process_line(line.strip())
+                                self._process_line(line, batch[i + 1:])
                             except Exception as e:
                                 console.warn(f"Signal error: {e}")
             except PermissionError:
@@ -173,8 +244,13 @@ class Bridge:
             except Exception as e:
                 console.warn(f"Comms relay hiccup: {e}")
 
-    def _process_line(self, line):
-        """Route a log line to the appropriate handler."""
+    def _process_line(self, line, rest_of_batch=()):
+        """Route a log line to the appropriate handler.
+
+        `rest_of_batch` is the remainder of the lines that arrived in the same
+        read, used to spot a cinematic that has already finished by the time
+        we hear about it.
+        """
         # Anarchy Radio FM commands (from mod UC code)
         if "XIPOD:" in line:
             self._process_command(line)
@@ -186,10 +262,13 @@ class Bridge:
         # enough to silently kill combat detection while explore kept working.
         low = line.lower()
 
-        # Cutscene detection (native game log lines)
-        if "Movie Started Event: CIN_" in line:
-            self._handle_cutscene_start(line)
-        elif "Movie Finished Event: CIN_" in line:
+        # Cutscene detection (native game log lines). Matched case-insensitively
+        # because the game is inconsistent about it — "Cin_Welcome_Labs_Part1"
+        # ships alongside "CIN_TP_WelcomeEngineering", and the capitalised-only
+        # test silently skipped the lower-case ones.
+        if "movie started event: cin" in low:
+            self._handle_cutscene_start(line, rest_of_batch)
+        elif "movie finished event: cin" in low:
             self._handle_cutscene_end(line)
 
         # Kismet concealment broken — civilians spotting XCOM fires this
@@ -276,7 +355,23 @@ class Bridge:
         # LoadMap fires on every shell load, launch and return alike. A
         # duplicate at launch is free — switch_state() ignores a state it's
         # already on — so this can safely overlap the init-complete trigger.
-        elif "loadmap: xcomshell" in low:
+        # MMS logs this from its own shell listener every time the shell comes
+        # up — boot and return-to-menu alike, twice per session in every log
+        # we have. It is the only shell signal we actually receive: our own
+        # XiPod_UISL_Shell listens for UIShell, but the screen the game pushes
+        # is UIFinalShell, and XCOM 2 matches listeners on the exact class, so
+        # STATE_SHELL_MENU has never once appeared in a real log.
+        elif "menu music played" in low:
+            if self._is_cinematic_locked():
+                console.debug("Cinematic lock active — suppressing shell switch")
+            else:
+                console.signal("MMS: Shell menu music — back to the main menu")
+                self.audio_engine.switch_state("state_shell_menu")
+
+        # Map-load backstop. WOTC boots the XPACK shell, so matching only
+        # "XComShell" missed the shell entirely on most installs — real logs
+        # show XPACK_Shell_Intro 23 times against XComShell_Tundra 4.
+        elif "loadmap: xcomshell" in low or "loadmap: xpack_shell" in low:
             if self._is_cinematic_locked():
                 console.debug("Cinematic lock active — suppressing shell map switch")
             else:
@@ -304,6 +399,49 @@ class Bridge:
             console.signal("Avenger cinematic incoming (State_UINarrative)")
             self.audio_engine.pause(fade=False)
 
+    def _report_flush(self, batch):
+        """Measure how far behind the game's log is running.
+
+        Every line carries the engine's own clock, so the engine-time span of
+        a SINGLE read is a lower bound on how long those lines sat unwritten.
+        A read covering 98 seconds of engine time means the game produced
+        those lines 98 seconds apart and we heard about all of them at once.
+
+        That is the whole question for cinematics. A cinematic writes nothing
+        while it plays, so if the log is buffered there is nothing to push
+        "Movie Started" out until the film ends — and by then it is too late
+        to pause for it. Spans near zero mean the log is prompt and the movie
+        events can be trusted live; large spans around movie events mean they
+        cannot, and detection has to move out of the log entirely.
+
+        Enable with "debug_log_flush": true in xipod_config.json. Look for
+        FLUSH lines in the app's own log under <music folder>/_logs/.
+        """
+        stamps = [t for t in (_engine_time(l) for l in batch) if t is not None]
+        if not stamps:
+            return
+
+        span = max(stamps) - min(stamps)
+        movies = [l for l in batch if "movie started event" in l.lower()
+                  or "movie finished event" in l.lower()]
+        if span < _FLUSH_SPAN_WARN and not movies:
+            return
+
+        console.debug(
+            f"FLUSH: one read carried {len(batch)} "
+            f"line{'' if len(batch) == 1 else 's'} spanning {span:.2f}s of "
+            f"engine time ({min(stamps):.2f}–{max(stamps):.2f})"
+            + (f", including {len(movies)} movie "
+               f"event{'' if len(movies) == 1 else 's'}" if movies else "")
+        )
+        for line in movies:
+            console.debug(f"FLUSH:   {line[:110]}")
+        if movies and span >= _FLUSH_SPAN_WARN:
+            console.debug(
+                "FLUSH:   ^ movie events arrived batched — the log is buffered, "
+                "so a cinematic cannot be caught from it while it plays"
+            )
+
     def _is_cinematic_locked(self):
         """True if a cinematic is actively playing and music must stay silent."""
         return time.time() < self._cinematic_lock_until
@@ -312,6 +450,10 @@ class Bridge:
         """Clear the cinematic lock and cancel any pending safety timer."""
         self._cinematic_lock_until = 0.0
         self._active_cinematic = None
+        # Also stands the mod-driven lock down, so that a lock released by
+        # the safety timer or by a STATE_ command hands the Movie-event path
+        # back rather than leaving it suppressed for the rest of the session.
+        self._uc_cinematic = False
         if self._cinematic_safety_timer:
             self._cinematic_safety_timer.cancel()
             self._cinematic_safety_timer = None
@@ -335,13 +477,11 @@ class Bridge:
             # A STATE_ command from our screen listeners means the game has
             # moved on to a new screen. If a cinematic lock is active, this
             # is proof the cinematic is over (player skipped or it ended).
-            # Clear the lock and let the state switch proceed.
+            # Clear the lock and let the state switch proceed. There used to
+            # be a "too fresh, ignore it" guard here for events arriving in
+            # the same read as Movie Started; that case is now caught at the
+            # source, in _handle_cutscene_start.
             if self._is_cinematic_locked():
-                elapsed = time.time() - self._cinematic_lock_set_at
-                if elapsed < self._CINEMATIC_MIN_LOCK:
-                    # Too fast — arrived in same batch as Movie Started
-                    console.debug(f"Cinematic lock too fresh ({elapsed:.1f}s) — suppressing {cmd}")
-                    return
                 console.signal(f"STATE_ during cinematic lock ({self._active_cinematic}) — cinematic over, clearing lock")
                 self._clear_cinematic_lock()
             self.audio_engine.switch_state(parts[0].lower())
@@ -363,18 +503,44 @@ class Bridge:
     def _extract_cin_name(self, line, prefix):
         """Extract the cinematic name from a Movie Started/Finished log line."""
         try:
-            raw = line.split(prefix)[1].split(",")[0].strip()
-            # Strip file extension if present (.bk2, etc.)
-            if "." in raw:
-                raw = raw.rsplit(".", 1)[0]
-            return raw
+            return _normalise_cin(line.split(prefix)[1].split(",")[0])
         except (IndexError, AttributeError):
             return ""
 
-    def _handle_cutscene_start(self, line):
+    @staticmethod
+    def _finished_later_in_batch(key, rest_of_batch):
+        """True if this cinematic's "Movie Finished" is already in this read."""
+        for line in rest_of_batch:
+            m = _MOVIE_FINISHED_RE.search(line)
+            if m and _normalise_cin(m.group(1)).lower() == key:
+                return True
+        return False
+
+    def _handle_cutscene_start(self, line, rest_of_batch=()):
+        # The mod already told us, earlier and more reliably. Its lock has no
+        # fixed duration and is released by CINE_OFF, so re-locking here with
+        # a table duration could only cut it short.
+        if self._uc_cinematic:
+            return
+
         cin_name = self._extract_cin_name(line, "Movie Started Event: ")
         key = cin_name.lower() if cin_name else ""
-        if not key or key not in _CINEMATIC_DURATIONS:
+        if not key:
+            return
+
+        # A cinematic writes nothing to the log while it plays, so there is
+        # often nothing to push "Movie Started" out of the engine's buffer
+        # until the film ends and both events arrive together. Locking on a
+        # cinematic that has demonstrably already finished would mute the
+        # music for its entire runtime — up to 204s — after the fact.
+        if self._finished_later_in_batch(key, rest_of_batch):
+            console.debug(
+                f"{cin_name} started and finished within one read — "
+                f"already over, not locking"
+            )
+            return
+
+        if key not in _CINEMATIC_DURATIONS:
             return
 
         duration = _CINEMATIC_DURATIONS[key]
@@ -401,21 +567,50 @@ class Bridge:
         self._cinematic_safety_timer.start()
 
     def _handle_cutscene_end(self, line):
-        cin_name = self._extract_cin_name(line, "Movie Finished Event: ")
-        key = cin_name.lower() if cin_name else ""
-        if not key or key not in _CINEMATIC_DURATIONS:
+        # CINE_OFF owns the release while the mod watcher is driving. Letting
+        # a Movie Finished clear the lock here would resume the music during
+        # a chained sequence, between two films the mod still considers one
+        # unbroken cinematic.
+        if self._uc_cinematic:
             return
 
-        # Reject stale "Movie Finished" that arrived in the same log batch
-        # as "Movie Started". The game buffers both events together — if we
-        # honored this immediately (or after a short delay), it would kill
-        # the lock while the movie is still playing. Drop it entirely and
-        # rely on the REAL "Movie Finished" event (which arrives when the
-        # player skips or the video actually ends) or the safety timer.
-        elapsed = time.time() - self._cinematic_lock_set_at
-        if elapsed < self._CINEMATIC_MIN_LOCK:
-            console.debug(f"Movie Finished for {cin_name} arrived too fast ({elapsed:.1f}s) — DISCARDING (stale buffered event)")
+        m = _MOVIE_FINISHED_RE.search(line)
+        if not m:
             return
+
+        cin_name = _normalise_cin(m.group(1))
+        key = cin_name.lower()
+        if not key:
+            return
+
+        played, runtime = float(m.group(2)), float(m.group(3))
+        stamp = _engine_time(line)
+
+        # Some Finished events are emitted twice against the same engine
+        # timestamp. The duplicate usually carries a raw clock reading in the
+        # played field (16860449s in one real log) rather than a duration, so
+        # it can only be filtered on identity.
+        if (key, stamp) == self._last_finished:
+            console.debug(f"Duplicate Movie Finished for {cin_name} — ignoring")
+            return
+        self._last_finished = (key, stamp)
+
+        was_known = key in _CINEMATIC_DURATIONS
+
+        # The line states the film's true runtime, so the bundled durations
+        # table only has to carry a cinematic until its first playthrough.
+        if 0 < runtime < 86400:
+            _CINEMATIC_DURATIONS[key] = int(round(runtime))
+
+        holding_lock = (self._active_cinematic or "").lower() == key
+        if not was_known and not holding_lock:
+            # Never locked for this one and it isn't in the table — resuming
+            # here could start music on a state that is meant to be silent.
+            return
+
+        if played < runtime * 2:  # guards against a duplicate's clock reading
+            how = "skipped" if played < runtime else "played through"
+            console.debug(f"{cin_name}: {how} ({played:.1f}s of {runtime:.1f}s)")
 
         self._process_cutscene_end(cin_name, key)
 
@@ -439,8 +634,9 @@ class Bridge:
             return
 
         # Resume music after a brief delay (lets the game settle)
-        console.debug("Scheduling post-cinematic resume in 2s")
-        t = threading.Timer(2.0, self._delayed_cinematic_resume, args=[cin_name])
+        console.debug(f"Scheduling post-cinematic resume in {_POST_CINEMATIC_RESUME_DELAY}s")
+        t = threading.Timer(_POST_CINEMATIC_RESUME_DELAY,
+                            self._delayed_cinematic_resume, args=[cin_name])
         t.daemon = True
         t.start()
 
@@ -543,6 +739,52 @@ class Bridge:
 
     def _cmd_rescan(self, parts):
         self.audio_engine.rescan()
+
+    # ------------------------------------------------------------------ #
+    #  Mod-driven cinematic lock
+    #
+    #  The mod polls for a cinematic and tells us before the film starts,
+    #  which is the only useful moment: once UIPlayMovie blocks the script
+    #  thread nothing more is written to the log until the film ends.
+    # ------------------------------------------------------------------ #
+
+    def _cmd_cine_watch(self, parts):
+        """The mod's watcher came up (fresh map). Nothing to do but note it."""
+        console.debug("Mod cinematic watcher active")
+
+    def _cmd_cine_on(self, parts):
+        if self._uc_cinematic:
+            return
+        self._uc_cinematic = True
+        console.signal("Cinematic starting (mod watcher) — holding music")
+
+        self.audio_engine.pause(fade=False)
+
+        self._active_cinematic = _UC_CINEMATIC
+        self._cinematic_lock_set_at = time.time()
+        self._cinematic_lock_until = self._cinematic_lock_set_at + _UC_CINEMATIC_SAFETY
+
+        # CINE_OFF is the real release; this only covers the mod going quiet
+        # (crash mid-film, or the watcher dying with the map).
+        if self._cinematic_safety_timer:
+            self._cinematic_safety_timer.cancel()
+        self._cinematic_safety_timer = threading.Timer(
+            _UC_CINEMATIC_SAFETY, self._safety_cinematic_resume, args=[_UC_CINEMATIC]
+        )
+        self._cinematic_safety_timer.daemon = True
+        self._cinematic_safety_timer.start()
+
+    def _cmd_cine_off(self, parts):
+        if not self._uc_cinematic:
+            return
+        self._uc_cinematic = False
+        console.signal("Cinematic over (mod watcher) — music resuming")
+        self._clear_cinematic_lock()
+
+        t = threading.Timer(_POST_CINEMATIC_RESUME_DELAY,
+                            self._delayed_cinematic_resume, args=[_UC_CINEMATIC])
+        t.daemon = True
+        t.start()
 
     def _cmd_play_id(self, parts):
         try:

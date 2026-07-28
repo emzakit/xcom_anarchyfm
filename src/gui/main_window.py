@@ -371,6 +371,8 @@ class XiPodWindow(QWidget):
             game_config_folder=game_config_folder,
             shuffle=shuffle,
             addons=discover_addons(cfg),
+            workshop_folder=cfg.get("workshop_folder", ""),
+            mod_config_folders=cfg.get("mod_config_folder", ""),
         )
         self.engine.set_volume(default_vol)
         self.engine.set_crossfade(crossfade_ms)
@@ -394,7 +396,8 @@ class XiPodWindow(QWidget):
         self._start_update_check()
 
         console.shen("Patching into XCOM's comms relay...")
-        self.bridge = Bridge(log_path, self.engine)
+        self.bridge = Bridge(log_path, self.engine,
+                             debug_flush=cfg.get("debug_log_flush", False))
         self.bridge.start()
 
         if not process_utils.is_game_running(default=True):

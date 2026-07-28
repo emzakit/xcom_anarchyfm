@@ -71,13 +71,16 @@ def main_cli():
     console.shen("Calibrating audio subsystems...")
     engine = XiPodEngine()
     engine.load_library(music_path, log_path, game_config_folder=game_config_folder,
-                        shuffle=shuffle, addons=discover_addons(cfg))
+                        shuffle=shuffle, addons=discover_addons(cfg),
+                        workshop_folder=cfg.get("workshop_folder", ""),
+                        mod_config_folders=cfg.get("mod_config_folder", ""))
     engine.set_volume(default_vol)
     engine.set_crossfade(crossfade_ms)
     engine.set_radio_chunk_minutes(cfg.get("radio_chunk_minutes", 10))
 
     console.shen("Patching into XCOM's comms relay...")
-    bridge = Bridge(log_path, engine)
+    bridge = Bridge(log_path, engine,
+                    debug_flush=cfg.get("debug_log_flush", False))
     bridge.start()
 
     if not process_utils.is_game_running(default=True):

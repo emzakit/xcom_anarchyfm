@@ -80,9 +80,12 @@ class TestSettingsRoundTrip(unittest.TestCase):
 
 class TestMMSConfig(unittest.TestCase):
 
+    # The _build_* helpers take a "skip reason" — None means "silence this
+    # state", a string means "leave it to MMS, and here's why".
+
     def test_tactical_uses_double_backslash_continuation(self):
         """UE3 ini line continuation is '\\\\' — a single backslash breaks MMS."""
-        content = mms_config._build_tactical_ini(True)
+        content = mms_config._build_tactical_ini(None)
         for line in content.splitlines():
             if line.rstrip().endswith("\\"):
                 self.assertTrue(line.rstrip().endswith("\\\\"),
@@ -90,8 +93,22 @@ class TestMMSConfig(unittest.TestCase):
         self.assertIn("+CombatDefs=", content)
         self.assertIn("+ExploreDefs=", content)
 
+    def test_tactical_defs_outscore_mms_stock(self):
+        """MMS breaks a score tie with a random shuffle, so the silent defs
+        must win on score or the mission is a coin flip. Stock defs leave
+        every field unset and score 1186; wildcards score 2338."""
+        content = mms_config._build_tactical_ini(None)
+        for block in ("+CombatDefs", "+ExploreDefs"):
+            start = content.index(block)
+            end = content.index(")", start)
+            body = content[start:end]
+            self.assertIn('MissionMusicSet="wildcard"', body, block)
+            self.assertIn('biome="wildcard"', body, block)
+            self.assertIn('plot="wildcard"', body, block)
+            # rain is deliberately absent — see test_tactical_envreq_omits_rain.
+
     def test_tactical_disabled_has_no_active_defs(self):
-        content = mms_config._build_tactical_ini(False)
+        content = mms_config._build_tactical_ini("toggled off")
         for line in content.splitlines():
             if line.startswith("+CombatDefs") or line.startswith("+ExploreDefs"):
                 self.fail(f"active def in disabled tactical ini: {line!r}")
@@ -110,10 +127,138 @@ class TestMMSConfig(unittest.TestCase):
         toggles["defeat"] = True
         self.assertIn("eSSG_Loss)", self._active_lines(toggles))
 
+    def test_empty_folder_leaves_state_to_mms(self):
+        """A state with no tracks must not be silenced — otherwise the user
+        gets dead air instead of their MMS pack."""
+        toggles = {"avenger": True, "geoscape": True, "squadselect": True,
+                   "victory": True, "defeat": True}
+        has_tracks = dict.fromkeys(toggles, True)
+        has_tracks["geoscape"] = False
+        self.assertNotIn("eSSG_Geoscape", self._active_lines(toggles, has_tracks))
+        self.assertIn("eSSG_SquadSelect", self._active_lines(toggles, has_tracks))
+
+        self.assertIn("no tracks",
+                      mms_config._build_tactical_ini(
+                          mms_config._reason("battle", {"battle": True},
+                                             {"battle": False})))
+        self.assertIn("+CombatDefs=",
+                      mms_config._build_tactical_ini(
+                          mms_config._reason("battle", {"battle": True},
+                                             {"battle": True})))
+
+    def test_reason_prefers_toggle_over_empty_folder(self):
+        self.assertIsNone(mms_config._reason("avenger", {"avenger": True}, None))
+        self.assertEqual("toggled off",
+                         mms_config._reason("avenger", {"avenger": False},
+                                            {"avenger": True}))
+        self.assertEqual("no tracks in its folder",
+                         mms_config._reason("avenger", {"avenger": True},
+                                            {"avenger": False}))
+
+    def test_pack_defs_registered_only_for_owned_states(self):
+        """MMS breaks a tie between a pack and us with Rand(), so a pack's
+        defs must be demoted to fallbacks on states we cover — and left alone
+        on states we don't, or the pack goes silent where it should play."""
+        toggles = {"avenger": True, "geoscape": False, "squadselect": True,
+                   "victory": True, "defeat": True}
+        packs = {"avenger": ["PackHQ1", "PackHQ2"], "geoscape": ["PackGeo"]}
+        active = self._active_lines(toggles, None, packs)
+
+        self.assertIn('+FallbackSongs="PackHQ1"', active)
+        self.assertIn('+FallbackSongs="PackHQ2"', active)
+        # geoscape is ours to leave alone — its pack def must stay eligible
+        self.assertNotIn("PackGeo", active)
+
+    def test_pack_defs_absent_when_no_packs(self):
+        toggles = {"avenger": True, "geoscape": True, "squadselect": True,
+                   "victory": True, "defeat": True}
+        self.assertNotIn("FallbackSongs", self._active_lines(toggles, None, None))
+        self.assertNotIn("FallbackDefs", mms_config._build_tactical_ini(None, None))
+
+    def test_tactical_envreq_omits_rain(self):
+        """rain=eRR_Always inside the nested struct stopped the whole entry
+        parsing, so the def silently vanished from MMS's pool. The struct
+        defaults it anyway."""
+        content = mms_config._build_tactical_ini(None)
+        self.assertIn('EnvReq=(biome="wildcard", plot="wildcard")', content)
+        self.assertNotIn("rain=", content)
+
+    def test_shell_pack_cues_moved_to_fallback_bucket(self):
+        """The shell has no MusicID to register, so a pack's cue has to be
+        moved between arrays instead."""
+        packs = {"shell_menu": ["SomePack.Shell_cue"]}
+        owned = mms_config._build_shell_ini(None, packs)
+        self.assertIn('-ShellCues="SomePack.Shell_cue"', owned)
+        self.assertIn('+FallbackCues="SomePack.Shell_cue"', owned)
+
+        # Not ours to cover -> the pack keeps the menu untouched.
+        off = mms_config._build_shell_ini("toggled off", packs)
+        self.assertNotIn("SomePack.Shell_cue", off)
+
+    def test_tactical_pack_defs_registered(self):
+        content = mms_config._build_tactical_ini(None, {"battle": ["PackCombat1"]})
+        self.assertIn('+FallbackDefs="PackCombat1"', content)
+
     @staticmethod
-    def _active_lines(toggles):
-        content = mms_config._build_strategy_ini(toggles)
+    def _active_lines(toggles, has_tracks=None, pack_defs=None):
+        content = mms_config._build_strategy_ini(toggles, has_tracks, pack_defs)
         return "\n".join(l for l in content.splitlines() if not l.startswith(";"))
+
+
+class TestMMSPacks(unittest.TestCase):
+
+    def test_finds_own_config_in_local_mods_folder(self):
+        """MMS reads config from the mod's own folder, and a hand-installed
+        or locally-built mod lives under the game install rather than the
+        workshop. Both hang off the same steamapps root."""
+        import mms_packs
+        with tempfile.TemporaryDirectory() as tmp:
+            workshop = os.path.join(tmp, "workshop", "content", "268500")
+            local = os.path.join(tmp, "common", "XCOM 2", "XComGame",
+                                 "Mods", "AnarchyRadioFM")
+            os.makedirs(workshop)
+            os.makedirs(os.path.join(local, "Config"))
+            with open(os.path.join(local, "AnarchyRadioFM.XComMod"), "w") as f:
+                f.write("[mod]\n")
+
+            dirs = mms_packs.find_own_config_dirs(workshop)
+            self.assertEqual(len(dirs), 1)
+            self.assertTrue(dirs[0].endswith(os.path.join("AnarchyRadioFM", "Config")))
+
+    def test_workshop_folder_derived_from_game_exe(self):
+        """Required now, so it needs to auto-fill — including for libraries on
+        another drive and for launchers that aren't XCom2.exe."""
+        from setup import find_workshop_folder
+        with tempfile.TemporaryDirectory() as tmp:
+            steamapps = os.path.join(tmp, "SteamLibrary", "steamapps")
+            exe = os.path.join(steamapps, "common", "XCOM 2",
+                               "SomeLauncher", "Launcher.exe")
+            os.makedirs(os.path.dirname(exe))
+            open(exe, "w").close()
+            os.makedirs(os.path.join(steamapps, "workshop", "content", "268500"))
+
+            found = find_workshop_folder(exe)
+            self.assertTrue(found.endswith(os.path.join("workshop", "content", "268500")))
+            self.assertTrue(os.path.isdir(found))
+
+    def test_workshop_folder_absent_returns_empty(self):
+        from setup import find_workshop_folder
+        with tempfile.TemporaryDirectory() as tmp:
+            exe = os.path.join(tmp, "nowhere", "game.exe")
+            os.makedirs(os.path.dirname(exe))
+            open(exe, "w").close()
+            self.assertEqual(find_workshop_folder(exe), "")
+
+    def test_active_mods_are_deduped_and_lowercased(self):
+        import mms_packs
+        with tempfile.TemporaryDirectory() as tmp:
+            with open(os.path.join(tmp, "XComModOptions.ini"), "w") as f:
+                f.write("[Engine.XComModOptions]\n")
+                f.write("ActiveMods=AnarchyRadioFM\n")
+                f.write("ActiveMods=AnarchyRadioFM\n")
+                f.write("ActiveMods=Halo3MusicPack\n")
+            self.assertEqual(mms_packs.active_mod_ids(tmp),
+                             {"anarchyradiofm", "halo3musicpack"})
 
 
 class TestLibrary(unittest.TestCase):
@@ -685,11 +830,14 @@ class TestSpotifyController(unittest.TestCase):
             sp.set_playlist("state_avenger", "")  # blank clears
             self.assertEqual(sp.playlist_for("state_avenger"), "")
 
-    def test_volume_round_trips_and_defaults_to_60(self):
+    def test_volume_round_trips_and_uses_default(self):
         import spotify
         with tempfile.TemporaryDirectory() as tmp:
             sp, config_path = self._controller(tmp)
-            self.assertEqual(sp.volume, 60)  # default
+            # Against the constant, not a literal: the default is a tuning
+            # value and has already moved once (60 -> 80, Spotify sat too
+            # quiet under the game).
+            self.assertEqual(sp.volume, spotify.DEFAULT_VOLUME)
             sp.volume = 45
             sp.save_config()
             sp2 = spotify.SpotifyController(config_path,

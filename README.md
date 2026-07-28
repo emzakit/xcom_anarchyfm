@@ -51,18 +51,23 @@ No conversions. No renaming. No ffmpeg. Just files in folders and an exe.
 and **[Music Modding System](https://steamcommunity.com/workshop/filedetails/?id=757398474)**.
 You need both — MMS does the silencing, this does the music.
 
-**2.** **[Download the app](https://github.com/emzakit/xcom_anarchyfm/releases/latest)**,
+**2.** Add **`-forcelogflush`** to XCOM 2's launch options — in Steam,
+right-click **XCOM 2 → Properties → Launch Options**. Without it, music plays
+over cinematics.
+
+**3.** **[Download the app](https://github.com/emzakit/xcom_anarchyfm/releases/latest)**,
 unzip it anywhere, and **run the exe.** A wizard walks you through the rest.
 
-**3.** Drop your music into the folders it makes for you. Done.
+**4.** Drop your music into the folders it makes for you. Done.
 
 <p align="center">
   <img src="assets/img_main_menu.png" alt="The Anarchy Radio FM control panel" width="420">
 </p>
 
-> **One setting worth changing:** turn XCOM's own Music volume to **0**
-> (*Options → Audio*). MMS silences most of the game's soundtrack but not all
-> of it, and the gaps are where you'd hear two at once.
+> **Upgrading from v2.2 or earlier?** You can turn XCOM's Music volume back up
+> (*Options → Audio*). Setting it to 0 used to be the workaround for the game's
+> soundtrack playing underneath everything — that's fixed, and muting it also
+> silences MMS and any music packs you're running.
 
 ---
 
@@ -151,12 +156,14 @@ Everything past "run the exe" lives in the
 
 The **Avenger and Squad Select** are the polished bits I actually stand behind —
 that's where the effort went. The **tactical side is beta** and trips
-occasionally: an overlap, the wrong mood, awkward timing. If you want a
-watertight full-game soundtrack, run an MMS music pack; this is happy to sit
-alongside one and cover the gaps.
+occasionally: an overlap, the wrong mood, awkward timing.
 
-There's a **[known bug](https://github.com/emzakit/xcom_anarchyfm/wiki/Troubleshooting#known-issues)** where music can
-keep playing when you back out to the main menu. I'm on it.
+Running an **MMS music pack alongside this** works properly as of v2.3 — put
+music on the screens you care about and the pack keeps everything else. Rarely,
+a screen will play your music one session and the pack's the next; switch that
+screen off in the app and the pack keeps it for good.
+
+**[Known issues →](https://github.com/emzakit/xcom_anarchyfm/wiki/Troubleshooting#known-issues)**
 
 **[Scanner flagged the exe?](https://github.com/emzakit/xcom_anarchyfm/wiki/Troubleshooting#flagged-as-a-virus)** It's
 a false positive — it's a Python packaging thing. Build it yourself if you'd

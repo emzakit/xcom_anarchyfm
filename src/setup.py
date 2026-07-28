@@ -111,6 +111,47 @@ def find_log_path_silent():
     return ""
 
 
+def find_workshop_folder(game_exe=None):
+    """Auto-detect <Steam>/steamapps/workshop/content/268500.
+
+    This is no longer a nicety for music packs. MMS reads its settings from
+    each mod's own Config folder — the game does not mirror mod config files
+    into the user's Documents config directory — so without a route to the
+    installed Anarchy Radio FM folder nothing gets silenced and the mod plays
+    on top of the game's music. See mms_packs.find_own_config_dirs.
+
+    Derived from the game executable, which sits under the same steamapps
+    root, so an install on any drive or library folder resolves without
+    asking the user to find it themselves.
+    """
+    roots = []
+
+    if game_exe:
+        # Walk up looking for the steamapps component.
+        path = os.path.abspath(game_exe)
+        while True:
+            parent = os.path.dirname(path)
+            if parent == path:
+                break
+            if os.path.basename(path).lower() == "steamapps":
+                roots.append(path)
+                break
+            path = parent
+
+    userprofile = os.environ.get("USERPROFILE", os.path.expanduser("~"))
+    roots.extend([
+        os.path.join(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"),
+                     "Steam", "steamapps"),
+        os.path.join(userprofile, "Steam", "steamapps"),
+    ])
+
+    for root in roots:
+        candidate = os.path.join(root, "workshop", "content", "268500")
+        if os.path.isdir(candidate):
+            return candidate
+    return ""
+
+
 def _find_game_config_folder(log_path=None):
     """Auto-detect the XCOM 2 user Config folder.
 

@@ -4,16 +4,18 @@
   "log_path": "C:\\Users\\YOU\\Documents\\my games\\XCOM2 War of the Chosen\\XComGame\\Logs\\Launch.log",
   "game_config_folder": "C:\\Users\\YOU\\Documents\\my games\\XCOM2 War of the Chosen\\XComGame\\Config",
   "workshop_folder": "",
+  "mod_config_folder": "",
   "auto_close_with_game": true,
   "default_volume": 0.8,
   "shuffle": true,
   "crossfade_ms": 2500,
+  "debug_log_flush": false,
   "spotify": {
     "enabled": false,
     "client_id": "",
     "client_secret": "",
     "redirect_uri": "http://127.0.0.1:8888/callback",
-    "volume": 60,
+    "volume": 80,
     "playlists": {
       "state_avenger": "spotify:playlist:PASTE_ID_HERE",
       "state_mission_combat": "spotify:playlist:PASTE_ID_HERE"
