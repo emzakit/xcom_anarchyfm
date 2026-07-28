@@ -180,6 +180,12 @@ class Bridge:
             self._process_command(line)
             return
 
+        # MMS's own log wording is matched case-insensitively. These used to be
+        # exact substring tests and had drifted apart — "Transition to explore!"
+        # against "Transition to Combat!" — so a single letter of casing was
+        # enough to silently kill combat detection while explore kept working.
+        low = line.lower()
+
         # Cutscene detection (native game log lines)
         if "Movie Started Event: CIN_" in line:
             self._handle_cutscene_start(line)
@@ -188,7 +194,7 @@ class Bridge:
 
         # Kismet concealment broken — civilians spotting XCOM fires this
         # native log line instead of the event system our UC hooks into.
-        elif "Kismet: << XCOM : Concealment Broken >>" in line:
+        elif "kismet: << xcom : concealment broken >>" in low:
             if self._is_cinematic_locked():
                 console.debug(f"Cinematic lock active — suppressing Kismet combat switch")
             else:
@@ -198,21 +204,31 @@ class Bridge:
         # MMS (Music Modding System) state transitions — MMS is the actual
         # sound manager, so we listen to its log output for tactical and
         # strategy music events instead of rolling our own detection.
-        elif "Music Modding System - Transition to explore!" in line:
+        # Explore. MMS never actually logs "Transition to explore" — that
+        # matcher was wishful thinking and explore only ever worked by
+        # accident, via "Starting Ambience" at mission start. "Started
+        # Explorer N" is the line MMS really emits, verified against real
+        # logs, and it also fires when combat drops back to explore.
+        elif ("music modding system - transition to explore" in low
+              or "music modding system - started explorer" in low):
             if self._is_cinematic_locked():
                 console.debug("Cinematic lock active — suppressing MMS explore transition")
             else:
                 console.signal("MMS: Transition to explore")
                 self.audio_engine.switch_state("state_mission_explore")
 
-        elif "Music Modding System - Transition to Combat!" in line:
+        # Combat has three independent triggers — the Kismet concealment break
+        # above, MMS's transition line, and MMS actually starting the combat
+        # track. Any one of them is enough; switch_state() ignores repeats.
+        elif ("music modding system - transition to combat" in low
+              or "music modding system - started combat" in low):
             if self._is_cinematic_locked():
                 console.debug("Cinematic lock active — suppressing MMS combat transition")
             else:
                 console.signal("MMS: Transition to combat")
                 self.audio_engine.switch_state("state_mission_combat")
 
-        elif "Music Modding System - Starting Ambience" in line:
+        elif "music modding system - starting ambience" in low:
             # First tactical music trigger — mission just started, explore mode
             if self._is_cinematic_locked():
                 console.debug("Cinematic lock active — suppressing MMS ambience start")
@@ -220,40 +236,58 @@ class Bridge:
                 console.signal("MMS: Mission ambience started (explore)")
                 self.audio_engine.switch_state("state_mission_explore")
 
-        elif "Music Modding System - PlayBaseViewMusic" in line:
+        elif "music modding system - playbaseviewmusic" in low:
             if self._is_cinematic_locked():
                 console.debug("Cinematic lock active — suppressing MMS avenger music")
             else:
                 console.signal("MMS: Avenger music")
                 self.audio_engine.switch_state("state_avenger")
 
-        elif "Music Modding System - PlayGeoscapeMusic" in line:
+        elif "music modding system - playgeoscapemusic" in low:
             if self._is_cinematic_locked():
                 console.debug("Cinematic lock active — suppressing MMS geoscape music")
             else:
                 console.signal("MMS: Geoscape music")
                 self.audio_engine.switch_state("state_geoscape")
 
-        elif "Music Modding System - PlaySquadSelectMusic" in line:
+        elif "music modding system - playsquadselectmusic" in low:
             if self._is_cinematic_locked():
                 console.debug("Cinematic lock active — suppressing MMS squad select music")
             else:
                 console.signal("MMS: Squad select music")
                 self.audio_engine.switch_state("state_squadselect")
 
-        elif "Music Modding System - PlayAfterActionMusic" in line:
+        elif "music modding system - playafteractionmusic" in low:
             if not self._is_cinematic_locked():
                 console.signal("MMS: After-action music")
                 # Victory/defeat is determined by the audio engine based on
                 # the STATE_ command from our post-mission listener
+
+        # Returning to the main menu. The shell map load is the only reliable
+        # marker we get for it.
+        #
+        # The comment below used to claim "subsequent shell visits go through
+        # UC's STATE_SHELL_MENU" — they don't. XiPod_UISL_Shell never fires in
+        # practice (real logs show a full session with zero STATE_SHELL_MENU
+        # lines despite two trips to the menu), so quitting to the main menu
+        # produced no state change at all and whatever was playing on the
+        # Avenger or in combat just kept going.
+        #
+        # LoadMap fires on every shell load, launch and return alike. A
+        # duplicate at launch is free — switch_state() ignores a state it's
+        # already on — so this can safely overlap the init-complete trigger.
+        elif "loadmap: xcomshell" in low:
+            if self._is_cinematic_locked():
+                console.debug("Cinematic lock active — suppressing shell map switch")
+            else:
+                console.signal("Shell map loading — back to the main menu")
+                self.audio_engine.switch_state("state_shell_menu")
 
         # Early shell detection — "Initializing Engine Completed" fires
         # ~1s after XComShell is created, after async loads are done.
         # By this point UC's StopMenuMusic() has had a real target to
         # kill. Using "Game class is 'XComShell'" was too early — native
         # music loaded async and started AFTER StopMenuMusic was called.
-        # Only fires once on initial launch; subsequent shell visits go
-        # through UC's STATE_SHELL_MENU via OnInit/OnReceiveFocus.
         elif "Initializing Engine Completed" in line:
             if self._is_cinematic_locked():
                 console.debug(f"Cinematic lock active — suppressing early shell switch")

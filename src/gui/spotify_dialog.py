@@ -80,6 +80,15 @@ class SpotifyDialog(QWidget):
         self.enable_cb.setChecked(self.sp.enabled)
         lay.addWidget(self.enable_cb)
 
+        self.shuffle_cb = QCheckBox("Shuffle playlists")
+        self.shuffle_cb.setChecked(self.sp.shuffle)
+        self.shuffle_cb.setToolTip(
+            "Turns Spotify's own shuffle on before starting a playlist.\n\n"
+            "Without it, Spotify starts every context from track 1 — so the\n"
+            "same state plays the same song every single time."
+        )
+        lay.addWidget(self.shuffle_cb)
+
         # --- Startup volume ---
         vol_row = QHBoxLayout()
         vol_lbl = QLabel("Player volume:")
@@ -220,6 +229,7 @@ class SpotifyDialog(QWidget):
     def _on_save(self):
         self._pull_credentials()
         self.sp.enabled = self.enable_cb.isChecked()
+        self.sp.shuffle = self.shuffle_cb.isChecked()
 
         # Player volume — store it, and if a state is currently on Spotify,
         # apply it live so the change is audible immediately.

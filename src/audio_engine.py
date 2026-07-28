@@ -95,6 +95,10 @@ class XiPodEngine:
         self._root_folder = None
         self._game_log_path = None
 
+        # Debounced settings write-back (see _persist_settings).
+        self._persist_lock = threading.Lock()
+        self._persist_timer = None
+
     # ------------------------------------------------------------------ #
     #  Library Loading
     # ------------------------------------------------------------------ #
@@ -353,13 +357,27 @@ class XiPodEngine:
         if not playlist:
             console.shen(f"No custom tracks for {top}. Game music has the conn.")
             self.pause()
+            # Drop the outgoing state's tracks. Leaving them in place meant
+            # active_playlist stayed stale, so Next/Prev would start playing
+            # the PREVIOUS state's music on a screen that's meant to be silent.
+            self.playback.current_segment = None
+            self.active_playlist = []
+            self.active_index = 0
             self.current_top = top
             return
 
-        # If resolved playlist is the same tracks already playing, just keep going
+        # If the resolved playlist is the same tracks already playing, keep
+        # going rather than restarting the same song on every screen change.
+        #
+        # EXCEPT when radio is involved on either side. Radio states share one
+        # folder, so leaving the Avenger for a screen that also draws from it
+        # matched here and simply carried on — the Avenger's track followed you
+        # out to the main menu. Radio is meant to re-tune on every arrival
+        # anyway, so a fresh random start is the correct behaviour.
         active_paths = {t['path'] for t in self.active_playlist} if self.active_playlist else set()
         new_paths = {t['path'] for t in playlist}
-        if active_paths == new_paths and self.playback.is_playing:
+        radio_involved = radio_mode or self._radio_mode
+        if active_paths == new_paths and self.playback.is_playing and not radio_involved:
             console.debug(f"Same playlist — holding steady on {top}")
             self.current_top = top
             return
@@ -662,6 +680,53 @@ class XiPodEngine:
     #  Settings Passthrough
     # ------------------------------------------------------------------ #
 
+    def _persist_settings(self, delay=1.5):
+        """Queue a write-back of settings to XComXiPod.ini.
+
+        Settings used to be exported only at startup and on rescan, so
+        anything changed in the GUI lived in memory and in the MMS files but
+        never reached XComXiPod.ini — every toggle, volume and effect quietly
+        reverted on the next launch.
+
+        Debounced because volume and FX are sliders: writing the ini (which
+        carries the whole track manifest) on every pixel of a drag would be
+        absurd. The last change in a burst wins, 1.5s later.
+        """
+        if not self._game_log_path:
+            return
+        with self._persist_lock:
+            if self._persist_timer is not None:
+                self._persist_timer.cancel()
+            self._persist_timer = threading.Timer(delay, self._write_settings_now)
+            self._persist_timer.daemon = True
+            self._persist_timer.start()
+
+    def _write_settings_now(self):
+        with self._persist_lock:
+            self._persist_timer = None
+        if not self._game_log_path:
+            return
+        try:
+            # prefer_existing=False — this IS the save. The file's old value
+            # must not win over what the user just changed.
+            self.library.export_ini(self._game_log_path,
+                                    self.settings.get_settings_lines(),
+                                    prefer_existing=False)
+            console.debug("Settings saved to XComXiPod.ini")
+        except Exception as e:
+            console.warn(f"Couldn't save settings: {e}")
+
+    def flush_settings(self):
+        """Write any pending settings immediately — called on shutdown so a
+        change made seconds before quitting isn't lost with the timer."""
+        with self._persist_lock:
+            pending = self._persist_timer is not None
+            if pending:
+                self._persist_timer.cancel()
+                self._persist_timer = None
+        if pending:
+            self._write_settings_now()
+
     def set_toggle(self, toggle_name, enabled):
         key = toggle_name.lower()
         old_value = self.settings.toggles.get(key)
@@ -671,6 +736,7 @@ class XiPodEngine:
 
         # Rewrite MMS ini files so the change takes effect on next game launch
         mms_config.sync_ini_files(self.settings.toggles)
+        self._persist_settings()
 
         if not enabled:
             # Toggled OFF mid-state → switch to silent override
@@ -688,6 +754,7 @@ class XiPodEngine:
 
     def set_state_volume(self, state_key, level):
         self.settings.set_volume(state_key, level)
+        self._persist_settings()
 
     def set_radio(self, state_key, enabled):
         key = state_key.lower()
@@ -695,6 +762,7 @@ class XiPodEngine:
         self.settings.set_radio(state_key, enabled)
         if old_value == enabled:
             return
+        self._persist_settings()
         # Radio toggle changed — reload current state to switch between
         # radio folder and normal folder.
         if self.current_top:
@@ -743,6 +811,7 @@ class XiPodEngine:
         self.settings.set_reverb(state_key, enabled)
         if old_value == enabled:
             return
+        self._persist_settings()
 
     def set_loop(self, state_key, enabled):
         key = state_key.lower()
@@ -750,6 +819,7 @@ class XiPodEngine:
         self.settings.set_loop(state_key, enabled)
         if old_value == enabled:
             return
+        self._persist_settings()
         if self.current_top:
             active_loop_key = self.settings.get_loop_key(self.current_top)
             if active_loop_key == key:
@@ -759,15 +829,19 @@ class XiPodEngine:
 
     def set_random_start(self, state_key, enabled):
         self.settings.set_random_start(state_key, enabled)
+        self._persist_settings()
 
     def set_preset(self, state_key, preset_name):
         self.settings.set_preset(state_key, preset_name)
+        self._persist_settings()
 
     def save_user_preset(self, slot):
         self.settings.save_user_preset(slot)
+        self._persist_settings()
 
     def clear_user_preset(self, slot):
         self.settings.clear_user_preset(slot)
+        self._persist_settings()
 
     def set_fx_param(self, param_name, value):
         key = param_name.lower()
@@ -775,6 +849,7 @@ class XiPodEngine:
         self.settings.set_fx_param(param_name, value)
         if old_value == int(value):
             return
+        self._persist_settings()
 
     def set_volume(self, level):
         self.volume = max(0.0, min(1.0, float(level)))
@@ -798,6 +873,7 @@ class XiPodEngine:
 
     def shutdown(self):
         """Stop playback and release audio resources. Call once on exit."""
+        self.flush_settings()
         if self._spotify_active and self.spotify:
             self.spotify.pause_async()
             self._spotify_active = False

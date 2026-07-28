@@ -109,25 +109,38 @@ class SetupWindow(QWidget):
         # --- 5. Radio Mode chunk length ---
         root.addWidget(self._section_label(
             "Step 5 — Radio Mode station length",
-            "Radio Mode tunes the Avenger to your STATE_RESISTANCE_RADIO folder "
-            "and starts every track at a random point, like catching a broadcast "
-            "already running. People often fill it with hour-long station rips — "
-            "and loading a whole hour costs a few hundred MB and a pause before "
-            "the first note. This is how big a slice it loads at a time; when the "
-            "slice ends it re-tunes to a fresh random spot. 10 minutes is a good "
-            "default. Set it to 0 to always play tracks to the end."
+            "How long a stretch Radio Mode plays before re-tuning."
         ))
         chunk_row = QHBoxLayout()
+        chunk_row.setSpacing(8)
         self.chunk_spin = QSpinBox()
         self.chunk_spin.setRange(0, 120)
         self.chunk_spin.setSuffix(" min")
         self.chunk_spin.setSpecialValueText("No limit (play to the end)")
         self.chunk_spin.setValue(int((existing_cfg or {}).get("radio_chunk_minutes", 10)))
-        self.chunk_spin.setFixedWidth(220)
+        self.chunk_spin.setFixedWidth(210)
         chunk_row.addWidget(self.chunk_spin)
+
+        why_btn = QPushButton("Why?")
+        why_btn.setCursor(Qt.PointingHandCursor)
+        why_btn.setFixedWidth(70)
+        why_btn.clicked.connect(self._explain_radio_length)
+        chunk_row.addWidget(why_btn)
         chunk_row.addStretch()
         root.addLayout(chunk_row)
-        root.addSpacing(16)
+        root.addSpacing(12)
+
+        # --- In-game music warning ---
+        music_warn = QLabel(
+            "One last thing: turn XCOM's own Music volume down to 0 "
+            "(Options → Audio, in game). MMS silences most of it, but the gaps "
+            "are where you'll hear two soundtracks at once."
+        )
+        music_warn.setWordWrap(True)
+        music_warn.setFont(QFont(FONT_FAMILY, 10))
+        music_warn.setStyleSheet(f"color: {AMBER};")
+        root.addWidget(music_warn)
+        root.addSpacing(12)
 
         root.addWidget(self._divider())
         root.addSpacing(16)
@@ -335,6 +348,29 @@ class SetupWindow(QWidget):
         # merged when the engine loads the library. See addons.py.
         self.result_cfg = cfg
         self.close()
+
+    def _explain_radio_length(self):
+        """The long version, on demand. It was inline once and dominated the
+        whole wizard — most people just want to accept the default."""
+        box = QMessageBox(self)
+        box.setWindowTitle("Radio Mode station length")
+        box.setIcon(QMessageBox.NoIcon)
+        box.setText("Why we're asking")
+        box.setInformativeText(
+            "Radio Mode tunes the Avenger to your STATE_RESISTANCE_RADIO folder "
+            "and starts every track at a random point, like catching a broadcast "
+            "that was already running.\n\n"
+            "People tend to fill that folder with hour-long station rips. Loading "
+            "a whole hour costs a few hundred MB of memory and leaves you staring "
+            "at silence for ten seconds before the first note.\n\n"
+            "So it loads a slice at a time. When the slice ends, it re-tunes to a "
+            "fresh random spot — which is what a radio station does anyway.\n\n"
+            "10 minutes gets you playing in about two seconds. Set it to 0 to "
+            "switch the limit off and play every track through to its end.\n\n"
+            "You can change this any time in Options."
+        )
+        box.setStyleSheet(self.styleSheet())
+        box.exec()
 
     def _ask_log_path(self):
         """Show a dialog to get the log path manually."""

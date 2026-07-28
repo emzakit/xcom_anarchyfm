@@ -19,6 +19,13 @@ There are two ways to organise your music, and you can mix them:
 [*] [b]One station[/b] — drop everything into STATE_RESISTANCE_RADIO/ and hit the [b]Radio Mode[/b] button in the desktop app. The Avenger then plays from that folder, with random start points. (Radio Mode is Avenger-only — see below.)
 [/list]
 
+[h3]IMPORTANT: turn the game's Music volume to 0[/h3]
+In game, go to [b]Options → Audio[/b] and set [b]Music[/b] to 0.
+
+MMS silences most of XCOM's own soundtrack for you, but not every screen and not every moment — and the gaps are exactly where you'll hear two soundtracks fighting each other. This one setting heads off most "weird audio" problems before they start.
+
+(The desktop app can't do this for you: XCOM keeps its audio settings in a binary profile save that also holds your character pool, and that's not something worth writing to on your behalf.)
+
 [h3]Setup Instructions[/h3]
 [list]
 [*] [b]Step 1:[/b] Subscribe to this mod and the required [url=https://steamcommunity.com/sharedfiles/filedetails/?id=757398474]Music Modding System[/url]. This mod leans entirely on MMS to silence the game's vanilla music:
@@ -85,6 +92,7 @@ On-screen menus caused too many headaches, so I stripped them out.
 [*] [b]Zero In-Game Setup:[/b] Everything is configured directly inside the desktop app. Nothing in the game itself needs tweaking.
 [*] [b]No ffmpeg install:[/b] As of v2 the audio decoder is bundled, so .mp3 / .ogg / .flac / .m4a all just work. Older versions made you install ffmpeg and put it on your PATH — that step is gone.
 [*] [b]No bundled browser:[/b] v1 shipped an embedded Chromium (a Web Player for streaming YouTube). It's been removed — it was 360 MB of the download and a browser engine is a lot of security surface to staple onto a music mod. Streaming per state lives in the Spotify feature, which drives the real Spotify desktop app instead. The download is about a third of the size as a result.
+[*] [b]It updates itself:[/b] from v2.2.0 the desktop app checks GitHub on startup and can install new releases for it. Your settings and music are never touched. You can switch the check off if you'd rather not.
 [/list]
 
 If you prefer a curated, hassle-free experience with absolutely zero setup, my original [b]Resistance Radio[/b] mod is still up and running perfectly: [url=https://steamcommunity.com/sharedfiles/filedetails/?id=2863096697]Resistance Radio on Steam[/url]

@@ -236,8 +236,23 @@ class MusicLibrary:
             return radio_tracks + own_tracks
         return radio_tracks or own_tracks
 
-    def export_ini(self, log_path, settings_lines):
-        """Write XComXiPod.ini with settings + track manifest."""
+    def export_ini(self, log_path, settings_lines, prefer_existing=True):
+        """Write XComXiPod.ini with settings + track manifest.
+
+        `prefer_existing` decides who wins a key both sides have an opinion on:
+
+          True  (startup/rescan) — the FILE wins. The player may have changed
+                settings in-game through MCM since we last looked, and those
+                shouldn't be stomped just because we booted.
+          False (saving)         — OUR settings win. The user just changed
+                something in the GUI; deferring to the old file value here is
+                what made every toggle appear to "not persist" — the save
+                dutifully rewrote the ini with the value it was trying to
+                replace.
+
+        Keys we hold no opinion on (CurrentScreenType, anything a newer mod
+        version writes) are preserved either way.
+        """
         base_dir = os.path.dirname(os.path.dirname(log_path))
         config_dir = os.path.join(base_dir, "Config")
 
@@ -288,10 +303,14 @@ class MusicLibrary:
                 if key in settings_by_key:
                     final_settings[key] = settings_by_key[key]
                 continue
-            if key in existing_settings:
+            if prefer_existing and key in existing_settings:
                 final_settings[key] = existing_settings[key]
             elif key in settings_by_key:
                 final_settings[key] = settings_by_key[key]
+            elif key in existing_settings:
+                # Saving, but we have no opinion on this key — keep the file's
+                # value rather than resetting it to the shipped default.
+                final_settings[key] = existing_settings[key]
             else:
                 final_settings[key] = f"{key}={default_settings[key]}"
 

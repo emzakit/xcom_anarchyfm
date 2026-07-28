@@ -2,6 +2,7 @@
 
 import os
 import subprocess
+import threading
 
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
@@ -9,7 +10,7 @@ from PySide6.QtWidgets import (
     QSizePolicy, QFileDialog, QMessageBox, QInputDialog,
     QSystemTrayIcon, QMenu,
 )
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QFont, QTextCursor, QIcon, QAction, QPixmap
 
 from audio_engine import XiPodEngine, DEFAULT_RADIO_CHUNK_MIN
@@ -24,6 +25,8 @@ from gui.effects import EffectsDialog
 from gui.mod_scaffold import scaffold_music_mod, safe_mod_name
 import console
 import process_utils
+import updater
+import version
 
 from paths import resource_path
 
@@ -38,6 +41,10 @@ _BANNER_PATH = resource_path("assets", "banner.png")
 
 class XiPodWindow(QWidget):
 
+    # Emitted from the update-check worker thread — Qt widgets may only be
+    # touched on the GUI thread, so the dialog is opened via this signal.
+    _update_found = Signal(object)
+
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
@@ -50,7 +57,9 @@ class XiPodWindow(QWidget):
         self._effects_dialog = None
         self._spotify_dialog = None
         self._addons_dialog = None
+        self._update_dialog = None
         self._shutting_down = False
+        self._update_found.connect(self._on_update_found)
 
         self.setWindowTitle("AFM")
         self.setMinimumSize(540, 700)
@@ -382,6 +391,7 @@ class XiPodWindow(QWidget):
             btn.setChecked(self.engine.settings.toggles.get(key, False))
 
         self._restore_radio_state()
+        self._start_update_check()
 
         console.shen("Patching into XCOM's comms relay...")
         self.bridge = Bridge(log_path, self.engine)
@@ -477,6 +487,52 @@ class XiPodWindow(QWidget):
         if was_on:
             self._radio_btn.setChecked(True)   # fires _on_radio_mode
             console.shen("Radio Mode restored from your last session.")
+
+    # ------------------------------------------------------------ #
+    #  Updates
+    # ------------------------------------------------------------ #
+
+    def _start_update_check(self):
+        """Ask GitHub about newer releases, off-thread.
+
+        Opt-out via config, and entirely best-effort: a failed check must never
+        get between the user and their music, so everything here swallows
+        errors and simply does nothing.
+        """
+        if not self.cfg.get("check_for_updates", True):
+            return
+
+        def worker():
+            try:
+                release = updater.check()
+            except Exception:
+                return
+            if not release or not release.is_newer():
+                return
+            if release.version == self.cfg.get("skipped_update", ""):
+                console.debug(f"Update {release.version} was skipped previously.")
+                return
+            self._update_found.emit(release)
+
+        threading.Thread(target=worker, daemon=True, name="AFMUpdateCheck").start()
+
+    def _on_update_found(self, release):
+        console.shen(f"Update available: {release.version} "
+                     f"(you have {version.__version__}).")
+        if self._update_dialog and self._update_dialog.isVisible():
+            return
+        from gui.update_dialog import UpdateDialog
+        self._update_dialog = UpdateDialog(release, on_skip=self._remember_update_choice)
+        self._update_dialog.setStyleSheet(STYLESHEET)
+        self._update_dialog.setWindowIcon(self.windowIcon())
+        self._update_dialog.closed.connect(lambda: setattr(self, '_update_dialog', None))
+        self._update_dialog.show()
+
+    def _remember_update_choice(self, release_version, auto_check):
+        """Don't nag about the same release twice, and honour the opt-out."""
+        self.cfg["skipped_update"] = release_version
+        self.cfg["check_for_updates"] = bool(auto_check)
+        save_config(self.cfg)
 
     def _on_addons(self):
         if self._addons_dialog and self._addons_dialog.isVisible():

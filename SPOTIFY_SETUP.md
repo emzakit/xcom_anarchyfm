@@ -18,6 +18,11 @@ That means:
 - ✅ The **Spotify desktop app must be open and running** while you play.
 - ✅ Start playing *something* in Spotify once so it becomes the "active device."
 - ❌ It won't work on a free account.
+- 🔀 **Shuffle is on by default.** Starting a Spotify playlist always begins at
+  track 1, so without shuffle every visit to a screen played the same song —
+  forever. Anarchy Radio FM now turns Spotify's own shuffle on before it starts a
+  playlist. There's a **Shuffle playlists** tickbox in the Spotify panel if you
+  want the old behaviour back. *(Fixed in v2.2.0.)*
 - ⚠️ Your API keys and OAuth tokens are stored **locally** on your PC
   (`xipod_config.json` and `.spotify_cache.json`, both git-ignored). Keep them
   private — treat your Client Secret like a password.

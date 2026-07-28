@@ -165,6 +165,7 @@ class SpotifyController:
         self.redirect_uri = DEFAULT_REDIRECT
         self.playlists = {}  # state_key -> context uri
         self.volume = DEFAULT_VOLUME  # 0-100, applied on first playback
+        self.shuffle = True  # ask Spotify to shuffle the context before playing
 
         self._access_token = None
         self._access_expires_at = 0
@@ -200,6 +201,7 @@ class SpotifyController:
             self.volume = max(0, min(100, int(sp.get("volume", DEFAULT_VOLUME))))
         except (TypeError, ValueError):
             self.volume = DEFAULT_VOLUME
+        self.shuffle = bool(sp.get("shuffle", True))
 
     def save_config(self):
         """Write the spotify block back into xipod_config.json, preserving
@@ -215,6 +217,7 @@ class SpotifyController:
             "client_secret": self.client_secret,
             "redirect_uri": self.redirect_uri,
             "volume": self.volume,
+            "shuffle": self.shuffle,
             "playlists": self.playlists,
         }
         try:
@@ -459,6 +462,16 @@ class SpotifyController:
                 return d.get("id")
         return devices[0].get("id")
 
+    def _set_shuffle(self, enabled, device_id=None):
+        """Toggle Spotify's own shuffle. Best-effort; never fails playback."""
+        params = {"state": "true" if enabled else "false"}
+        if device_id:
+            params["device_id"] = device_id
+        try:
+            self._api("PUT", "/me/player/shuffle", params=params)
+        except Exception:
+            pass
+
     def play_context(self, context_uri):
         """Point Spotify at a playlist/album/artist context and play it.
         Returns (ok, message)."""
@@ -467,6 +480,13 @@ class SpotifyController:
             if not device_id:
                 return False, ("No Spotify device found. Open the Spotify desktop "
                                "app and start playing something once, then retry.")
+
+            # Shuffle BEFORE the play call. Starting a context plays it from
+            # track 1, so without this you get the same song every single time
+            # the state fires — which is most of the way to torture.
+            if self.shuffle:
+                self._set_shuffle(True, device_id)
+
             params = {"device_id": device_id}
             status, _ = self._api("PUT", "/me/player/play", params=params,
                                   json_body={"context_uri": context_uri})

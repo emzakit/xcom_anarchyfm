@@ -6,6 +6,14 @@
 // ============================================================
 class XiPod_UISL_Strategy extends UIScreenListener;
 
+// Emission is deliberately UNCONDITIONAL (bar the squad-select race below).
+// There used to be an `else if (Current != "AVENGER")` guard here to avoid
+// repeat log lines, but the desktop app already ignores a state it's already
+// playing — switch_state() returns early on the same state — so the guard
+// bought nothing and cost everything when CurrentScreenType went stale.
+// MMS logs every event unconditionally for the same reason: a duplicate line
+// is free, a missing one is a silent failure.
+
 event OnInit(UIScreen Screen)
 {
     local string Current;
@@ -18,7 +26,7 @@ event OnInit(UIScreen Screen)
         // Delay so UITacticalHUD can claim TACTICAL first if launching.
         Screen.SetTimer(2.0, false, 'DoDelayedAvengerEmit', self);
     }
-    else if (Current != "AVENGER")
+    else
     {
         class'XiPod_Settings'.static.SetCurrentScreen("AVENGER");
         `log("XIPOD: STATE_AVENGER");
@@ -35,7 +43,7 @@ event OnReceiveFocus(UIScreen Screen)
     {
         Screen.SetTimer(2.0, false, 'DoDelayedAvengerEmit', self);
     }
-    else if (Current != "AVENGER")
+    else
     {
         class'XiPod_Settings'.static.SetCurrentScreen("AVENGER");
         `log("XIPOD: STATE_AVENGER");

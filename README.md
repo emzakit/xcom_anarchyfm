@@ -59,6 +59,16 @@ I made this as a companion to MMS specifically so that you can have the two runn
 > heavy lifting of silencing the game's built-in music, and Anarchy Radio FM leans on it to
 > work at all. **Install and enable MMS first** — nothing here works without it.
 
+> **Turn XCOM's own Music volume down to 0.** In game: **Options → Audio →
+> Music**. MMS silences most of the game's soundtrack for you, but not every
+> screen and not every moment — and the gaps are exactly where you'll hear two
+> soundtracks fighting each other. This one setting prevents most of the
+> "weird audio" reports.
+>
+> *(No, the app can't do it for you. XCOM stores audio settings in a binary
+> profile save that also holds your character pool — not something worth
+> writing to on your behalf.)*
+
 ---
 
 ## Alright, here's how it works
@@ -256,6 +266,9 @@ buttons, the in-game mod also ships `XiPodPlay` / `XiPodPause` / `XiPodNext` /
 - **State toggles** — flip Anarchy Radio FM on or off per state. Switch one off and MMS
   hands the game's own music back for that screen. *(Heads-up: toggle changes
   land on the **next** game launch, since XCOM only reads its config at startup.)*
+  Toggles, volumes and effects are **saved to `XComXiPod.ini`** and come back
+  next time — they're also what the in-game MCM menu reads, so the two stay in
+  step. *(Before v2.2.0 they quietly reverted on every launch.)*
 - **Options** — tweak your configured paths.
 - **Effects** — per-state presets and FX (radio filter, reverb, bass, chorus,
   bitcrush, echo), plus loop / random-start switches.
@@ -328,6 +341,26 @@ the JSON, publish. Full walkthrough in
 
 ---
 
+## Staying up to date
+
+From v2.2.0 the app checks GitHub for new releases when it starts, shows you
+the release notes, and can install the update itself — download, verify, swap,
+relaunch. No hunting for the zip.
+
+- **It never touches your stuff.** The update copies the new files over the
+  old ones; it never mirrors or deletes. `xipod_config.json`,
+  `xipod_presets.json` and `.spotify_cache.json` are explicitly excluded, so
+  your settings survive — as does a music library kept next to the exe.
+- Downloads are pulled **only** from this repo's GitHub releases over HTTPS,
+  and the zip is checked for the right size and the right contents before
+  anything is copied.
+- Don't want it? Untick **Check for updates when Anarchy Radio FM starts** in
+  the update window. Dismiss a version and it won't ask about that one again.
+- Running from source? It'll tell you there's a new version and leave the
+  updating to `git pull`.
+
+---
+
 ## What happened to the Web Player? (removed in v2)
 
 Earlier versions had a **Web Player** — a browser embedded in the app for
@@ -356,7 +389,8 @@ good at.
 
 | Path | What it is |
 |------|-----------|
-| `src/` | The app itself (audio engine, log watcher, GUI, Spotify control, setup, MMS config writer) |
+| `src/` | The app itself (audio engine, log watcher, GUI, Spotify control, music addons, updater, setup, MMS config writer) |
+| `addon_template/` | ModBuddy template + guide for building your own music packs |
 | `tests/` | Unit + integration tests (`python -m unittest discover -s tests`) |
 | `SPOTIFY_SETUP.md` | Step-by-step for the experimental Spotify hook-up |
 | `music/` | Your music library — ships as empty `STATE_*` folders ready to fill |

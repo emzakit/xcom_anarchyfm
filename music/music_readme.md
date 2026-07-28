@@ -90,6 +90,14 @@ you switch packs on and off from the app's **Music Addons** panel.
 
 If a pack ships a file with the same name as one of yours, **yours wins**.
 
+## Before you start: turn XCOM's music off
+
+In game: **Options → Audio → Music → 0.**
+
+MMS silences most of the game's own soundtrack, but not every screen and not
+every moment. The gaps are where you'd hear two soundtracks at once, and this
+one setting avoids nearly all of it.
+
 ## Per-state settings
 
 Everything else — volume, effects presets, reverb, random start, looping — is

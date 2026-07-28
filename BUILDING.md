@@ -10,6 +10,13 @@ ModBuddy) and is not covered here.
 venv\Scripts\pip install pyinstaller
 ```
 
+## Before you build a release
+
+Bump `__version__` in **`src/version.py`**, and make the GitHub release tag
+match it. That number is what the in-app updater compares against the latest
+release, so if it lags behind the tag every user gets offered an update they
+already have — and if it runs ahead, nobody is ever told about a real one.
+
 ## Build
 
 ```bash
@@ -30,7 +37,7 @@ the Workshop mod download) — the exe does not work without its `_internal`
 sibling.
 
 ```powershell
-Compress-Archive -Path dist\AnarchyRadioFM -DestinationPath dist\AnarchyRadioFM_App_v2.1.0.zip -Force
+Compress-Archive -Path dist\AnarchyRadioFM -DestinationPath dist\AnarchyRadioFM_App_v2.2.0.zip -Force
 ```
 
 Current release: **174 MB installed, 72 MB zipped.**

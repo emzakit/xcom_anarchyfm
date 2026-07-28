@@ -83,6 +83,21 @@ var config string UserPreset2;
 var config string UserPreset3;
 
 // Tracks which game screen is currently active (runtime state).
+// Which screen the player is on right now.
+//
+// This is runtime state and it would be cleaner as a plain `var` — but it
+// CANNOT be. SetCurrentScreen() is a static function assigning to
+// `default.CurrentScreenType`, and UnrealScript only allows a static function
+// to write a default value on a `config` property. Drop the keyword and the
+// build fails with "Can't change default values of non-config properties".
+//
+// So it persists into XComXiPod.ini between sessions. That used to matter a
+// great deal: listeners guarded on this value would read a stale screen from
+// the last session — in practice "AVENGER" — decide nothing had changed, and
+// stay silent for an entire playthrough. The fix was to stop guarding on it
+// (see XiPod_UISL_Strategy) rather than to stop storing it. UIShell.OnInit
+// resets it to SHELL_MENU at launch anyway, since the shell is always the
+// first screen the player sees.
 var config string CurrentScreenType;
 
 // --- Read helpers ---
