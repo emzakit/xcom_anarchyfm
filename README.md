@@ -1,12 +1,38 @@
 <p align="center">
-  <img src="assets/git_banner.png" alt="Anarchy Radio FM" width="520">
+  <img src="assets/git_banner.png" alt="Anarchy Radio FM" width="640">
 </p>
 
-# Anarchy Radio FM
+<h1 align="center">Anarchy Radio FM</h1>
 
-**Replace the soundtrack of XCOM 2 with your own music.**
+<p align="center">
+  <strong>Replace the soundtrack of XCOM 2 with your own music.</strong>
+</p>
 
-https://steamcommunity.com/sharedfiles/filedetails/?id=3772839338
+<p align="center">
+  <a href="https://github.com/emzakit/xcom_anarchyfm/releases/latest">
+    <img alt="Latest release" src="https://img.shields.io/github/v/release/emzakit/xcom_anarchyfm?style=for-the-badge&labelColor=08141a&color=5fd3e3">
+  </a>
+  <a href="https://steamcommunity.com/sharedfiles/filedetails/?id=3772839338">
+    <img alt="Steam Workshop" src="https://img.shields.io/badge/Steam-Workshop-d9a441?style=for-the-badge&labelColor=08141a&logo=steam">
+  </a>
+  <a href="LICENSE">
+    <img alt="MIT licence" src="https://img.shields.io/badge/licence-MIT-5fd3e3?style=for-the-badge&labelColor=08141a">
+  </a>
+</p>
+
+---
+
+<p align="center">
+  <a href="https://youtu.be/y4coRhi1n3w">
+    <img src="https://img.youtube.com/vi/y4coRhi1n3w/maxresdefault.jpg" alt="Watch Anarchy Radio FM in action" width="640">
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://youtu.be/y4coRhi1n3w"><strong>▶&nbsp; Watch it in action</strong></a>
+</p>
+
+---
 
 Anarchy Radio FM is a little desktop app that plays your own `.mp3` / `.ogg` /
 `.wav` / `.flac` / `.m4a` / `.opus` files in sync with the game — title music on the menu, chill tunes on the Avenger,
@@ -23,22 +49,36 @@ I'm making this open source because everything should be (especially if AI helps
 The heart of it is having **your own music on the Avenger and Squad Select**. This is the part that works properly, and it's where the vast majority of the effort went.
 Everything else is a fun bonus that's still finding its feet.
 
-## Links
-[Grab the latest release](https://github.com/emzakit/xcom_anarchyfm/releases)
+<p align="center">
+  <img src="assets/img_main_menu.png" alt="The Anarchy Radio FM control panel" width="520">
+</p>
 
-[Subscribe to the Anarchy FM Steam mod (required)](https://steamcommunity.com/sharedfiles/filedetails/?id=3772839338)
+## Quick links
 
-[Music Modding System](https://steamcommunity.com/workshop/filedetails/?id=757398474)
+|   | |
+|---|---|
+| 📥 | **[Download the latest release](https://github.com/emzakit/xcom_anarchyfm/releases/latest)** |
+| 🎮 | **[Subscribe on the Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3772839338)** — required |
+| 🎼 | [Music Modding System](https://steamcommunity.com/workshop/filedetails/?id=757398474) — required |
+| 🚀 | [Alternative Mod Launcher](https://github.com/X2CommunityCore/xcom2-launcher) — recommended |
+| 📂 | [How to use the music folders](music/music_readme.md) |
+| 🎧 | [How to set up Spotify](SPOTIFY_SETUP.md) |
+| 🛠️ | [How to make your own music pack](addon_template/MODDING_GUIDE.md) |
+| 🔨 | [How to build the executable yourself](BUILDING.md) |
+| 📝 | [Changelog](CHANGELOG.md) |
 
-[Alternative Mod Launcher](https://github.com/X2CommunityCore/xcom2-launcher)
+## Contents
 
-[How to use the music folders](https://github.com/emzakit/xcom_anarchyfm/blob/main/music/music_readme.md)
-
-[How to setup Spotify](https://github.com/emzakit/xcom_anarchyfm/blob/main/SPOTIFY_SETUP.md)
-
-[How to build the executable yourself](https://github.com/emzakit/xcom_anarchyfm/blob/main/BUILDING.md)
-
-<img src="assets/img_main_menu.png" alt="Main menu panel" width="520">
+- [Things to watch out for](#things-to-watch-out-for)
+- [Alright, here's how it works](#alright-heres-how-it-works)
+- [What you'll need](#what-youll-need)
+- [Getting it running](#getting-it-running)
+- [Adding your music](#adding-your-music)
+- [Resistance Radio mode](#resistance-radio-mode-the-good-stuff)
+- [The buttons](#the-buttons)
+- [Spotify per state](#spotify-per-state-experimental--your-keys-your-risk)
+- [Music Addons](#music-addons--workshop-music-packs)
+- [Staying up to date](#staying-up-to-date)
 
 ## Things to watch out for
 
@@ -398,7 +438,7 @@ good at.
 | `requirements.txt` | Python dependencies |
 | `xipod_defaults.json` | Built-in presets, INI defaults, and cinematic timing data |
 | `xipod_config.example.json` | A template for the per-user config |
-| `addon_template/MODDING_GUIDE.md` | How to build and share music packs |
+| `CHANGELOG.md` | What changed, and when |
 
 ---
 
@@ -415,3 +455,13 @@ are both mine, **emzakit (Moondear)**.
 
 Released under the MIT License —
 see [`LICENSE`](LICENSE). Now go make the Avenger sound like *yours*.
+
+<p align="center">
+  <a href="https://youtu.be/y4coRhi1n3w">▶ See it in action</a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/emzakit/xcom_anarchyfm/releases/latest">Download</a>
+  &nbsp;·&nbsp;
+  <a href="https://steamcommunity.com/sharedfiles/filedetails/?id=3772839338">Steam Workshop</a>
+  &nbsp;·&nbsp;
+  <a href="CHANGELOG.md">Changelog</a>
+</p>
