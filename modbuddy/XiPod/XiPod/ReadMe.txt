@@ -1,18 +1,16 @@
 [h1]Anarchy Radio FM[/h1]
 
-[b]Your music. Your XCOM. Finally.[/b]
+[b]Anarchy Radio FM replaces XCOM 2's soundtrack with local files![/b]
+
+Drop in .mp3, .ogg, .wav, .flac, .m4a or .opus and it plays in sync with the game. No need to learn how to create those scary gigantic upk files anymore.
 
 Hans Zimmer scoring your Geoscape while the world quietly falls apart? Go on then. Slipknot the second the shooting starts? Absolutely. The Spice Girls playing over an ADVENT ambush because you thought it would be funny and now it's canon? Nobody here is going to stop you. GTA radio playing over the Avengers so you can have a laugh at Chatterbox FM? Sure!
-
-Anarchy Radio FM replaces XCOM 2's soundtrack with [b]whatever you want![/b] Your files, your folders, your rules..
 
 [b]Watch it in action:[/b] https://youtu.be/y4coRhi1n3w
 
 You will see the current primary bug, backing out to the menu keeps playing whatever was playing. Yeah, yeah, I'm on it.
 
 This is the follow-up to my [url=https://steamcommunity.com/sharedfiles/filedetails/?id=2863096697]Resistance Radio[/url] mod. Three years I've been chewing on this idea. The problem was always the same: doing it properly meant nightmare DLL injections that crash the game the moment you look at them funny. So I stopped trying to do it properly. This works instead.
-
-Drop in .mp3, .ogg, .wav, .flac, .m4a or .opus and it plays in sync with the game. No conversions. No renaming. No ffmpeg. Just files in folders.
 
 [hr][/hr]
 [h2]⚠ READ THIS BEFORE SUBSCRIBING[/h2]
@@ -38,7 +36,7 @@ MMS silences most of XCOM's own soundtrack, but not every screen and not every m
 
 (The app can't do this for you. XCOM keeps audio settings in a binary profile save that also holds your character pool, and I'm not writing to that on your behalf.)
 
-[i]Don't trust a random exe off the internet? Good instinct. It's all open source —[/i] [url=https://github.com/emzakit/xcom_anarchyfm/blob/main/BUILDING.md]build it yourself[/url].
+[i]Don't trust a random exe off the internet? Good instinct. It's all open source —[/i] [url=https://github.com/emzakit/xcom_anarchyfm/wiki/Building-the-exe]build it yourself[/url].
 
 [hr][/hr]
 [h2]How you organise it[/h2]
@@ -88,7 +86,7 @@ If someone builds an addon for this, you will be able to subscribe to the music 
 [/list]
 
 [h3]Spotify (experimental)[/h3]
-Pin a Spotify playlist to each game state. Needs Premium, needs the desktop app open, needs your own API keys — it drives your account through your own registration, so it's very much an at-your-own-risk toy. But when it works it's great. [url=https://github.com/emzakit/xcom_anarchyfm/blob/main/SPOTIFY_SETUP.md]Setup guide here[/url].
+Pin a Spotify playlist to each game state. Needs Premium, needs the desktop app open, needs your own API keys — it drives your account through your own registration, so it's very much an at-your-own-risk toy. But when it works it's great. [url=https://github.com/emzakit/xcom_anarchyfm/wiki/Spotify-setup]Setup guide here[/url].
 
 [h3]Changing tracks[/h3]
 On-screen menus caused more headaches than they solved, so:

@@ -1,8 +1,8 @@
 """Spotify dialog (EXPERIMENTAL) — credentials, account link, per-state playlists.
 
 Lets the user paste their own Spotify app credentials, authorize their
-account, and bind a Spotify playlist to each game state. See SPOTIFY_SETUP.md
-for how to get the credentials. Everything here drives the user's own Spotify
+account, and bind a Spotify playlist to each game state. See the Spotify setup
+page in the wiki for how to get the credentials. Everything here drives the user's own Spotify
 account through their own app registration — at their own risk.
 """
 
@@ -60,7 +60,8 @@ class SpotifyDialog(QWidget):
             "• The Spotify DESKTOP APP must be open and running (Anarchy Radio FM remote-"
             "controls it — it does not stream audio itself).\n"
             "• Playing starts on whichever device Spotify is active on.\n"
-            "See SPOTIFY_SETUP.md for step-by-step key setup."
+            "See the Spotify setup guide in the wiki for step-by-step key setup:\n"
+            "github.com/emzakit/xcom_anarchyfm/wiki/Spotify-setup"
         )
         warn.setWordWrap(True)
         warn.setStyleSheet(f"color: {AMBER}; font-size: 11px;")
