@@ -314,7 +314,7 @@ in Anarchy Radio FM that opens it all up.
 
 <img src="assets/img_addons.png" alt="Music Addons panel" width="520">
 
-Subscribe to a music pack on the Workshop and it just turns up. The **Music
+If someone decides to make a music addon for this, you will be able to subscribe to a music pack on the Workshop and it just turns up. The **Music
 Addons** button lists everything you're subscribed to, with its author, genre
 tags, description and how many tracks it's contributing — and a switch to turn
 each one on or off.
