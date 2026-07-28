@@ -75,6 +75,8 @@ Everything else is a fun bonus that's still finding its feet.
 - [Spotify per state](#spotify-per-state-experimental--your-keys-your-risk)
 - [Music Addons](#music-addons--workshop-music-packs)
 - [Staying up to date](#staying-up-to-date)
+- [Flagged as a virus?](#flagged-as-a-virus)
+- [Known issues](#known-issues)
 
 ## Things to watch out for
 
@@ -404,6 +406,37 @@ relaunch. No hunting for the zip.
   the update window. Dismiss a version and it won't ask about that one again.
 - Running from source? It'll tell you there's a new version and leave the
   updating to `git pull`.
+
+---
+
+## My scanner doesn't like this...
+
+Some scanners flag it, and it's a false positive. The app is packaged with
+[PyInstaller](https://pyinstaller.org/), which bundles a Python runtime and
+unpacks it at launch which close enough to how malware behaves that heuristics get
+twitchy about it. Practically every unsigned PyInstaller app has this problem.
+
+You don't have to take my word for it, though. The whole thing is open source:
+[read the source](src/), or [build it yourself](BUILDING.md) and know exactly
+what you're running.
+
+Code signing would clear it up properly, but it runs to a few hundred a year which is
+a bit much for a free XCOM mod, so that's not happening.
+
+---
+
+## Known issues
+
+- **Music can keep playing when you back out to the main menu.** Whatever was
+  playing on the Avenger or in a mission may carry on underneath the menu.
+  Being worked on. It's much less noticeable if you've set XCOM's own Music
+  volume to 0, as above.
+- **Tactical is beta.** Combat and explore transitions trip occasionally — an
+  overlap, the wrong mood, a beat of awkward timing. See
+  [Things to watch out for](#things-to-watch-out-for).
+
+Found something else? **[Open an issue](https://github.com/emzakit/xcom_anarchyfm/issues)** —
+please include the comms log from the app and your `Launch.log`.
 
 ---
 

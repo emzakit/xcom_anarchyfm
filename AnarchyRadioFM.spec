@@ -96,6 +96,50 @@ a.datas = TOC([e for e in a.datas if not _drop(e)])
 print(f"[spec] prune pass dropped {_before - len(a.binaries) - len(a.datas)} files")
 
 
+# ------------------------------------------------------------------ #
+#  Windows version resource
+# ------------------------------------------------------------------ #
+
+def _version_resource():
+    import re
+    src = open(os.path.join("src", "version.py"), encoding="utf-8").read()
+    ver = re.search(r'__version__\s*=\s*"([^"]+)"', src).group(1)
+    parts = [int(p) for p in re.findall(r"\d+", ver)][:4]
+    parts += [0] * (4 - len(parts))
+    quad = ", ".join(str(p) for p in parts)
+
+    text = f"""VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers=({quad}), prodvers=({quad}),
+    mask=0x3f, flags=0x0, OS=0x40004, fileType=0x1, subtype=0x0, date=(0, 0)
+  ),
+  kids=[
+    StringFileInfo([StringTable('040904B0', [
+      StringStruct('CompanyName', 'emzakit'),
+      StringStruct('FileDescription', 'Anarchy Radio FM - custom soundtracks for XCOM 2'),
+      StringStruct('FileVersion', '{ver}'),
+      StringStruct('InternalName', 'AnarchyRadioFM'),
+      StringStruct('LegalCopyright', 'Copyright (c) 2026 emzakit. MIT Licence.'),
+      StringStruct('OriginalFilename', 'AnarchyRadioFM.exe'),
+      StringStruct('ProductName', 'Anarchy Radio FM'),
+      StringStruct('ProductVersion', '{ver}'),
+      StringStruct('Comments', 'Open source: https://github.com/emzakit/xcom_anarchyfm'),
+    ])]),
+    VarFileInfo([VarStruct('Translation', [1033, 1200])])
+  ]
+)
+"""
+    path = os.path.join("build", "version_info.txt")
+    os.makedirs("build", exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text)
+    print(f"[spec] version resource: {ver}")
+    return path
+
+
+_VERSION_FILE = _version_resource()
+
+
 pyz = PYZ(a.pure)
 
 exe = EXE(
@@ -110,6 +154,7 @@ exe = EXE(
     upx=False,
     console=False,             # windowless — the comms log lives in the GUI
     icon="assets\\AnarchyRadioFM.ico",
+    version=_VERSION_FILE,
 )
 
 coll = COLLECT(

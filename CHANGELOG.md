@@ -7,7 +7,8 @@ where the in-game Workshop mod also changed, it's called out.
 
 ## v2.2.0
 
-Mostly a fix release, plus the app can now update itself.
+Mostly a fix release, plus the app can now update itself. Note the menu-music
+bug is **not** resolved — see Known issues below.
 
 ### Added
 
@@ -20,13 +21,17 @@ Mostly a fix release, plus the app can now update itself.
 - A **Why?** button in the setup wizard explaining the Radio Mode station
   length, instead of a wall of text.
 
+### Known issues
+
+- **Music can still keep playing when you back out to the main menu.** This
+  release adds a detection path for it — the app now picks up the game's own
+  `LoadMap: XComShell` line, because the mod's shell listener doesn't reliably
+  fire and MMS emits no shell signal at all. Replaying real logs shows the
+  state change is now detected, but it isn't reliably stopping playback in
+  practice yet. Still being worked on.
+
 ### Fixed
 
-- **Music followed you to the main menu.** Quitting to the menu from the Avenger
-  or a mission left whatever was playing running underneath it. The mod's shell
-  listener doesn't reliably fire and MMS has no shell signal, so nothing told
-  the app the state had changed. Now keyed off the game's own
-  `LoadMap: XComShell` line.
 - **Settings never persisted.** Toggles, per-state volumes and effects reverted
   on every launch — the ini writer merged with the *file* winning over the app,
   so each save rewrote the value it was meant to replace.
