@@ -81,15 +81,52 @@ mid-ramble. It's ridiculous and it's the best thing here.
 
 ## What else it does
 
-|   |   |
-|---|---|
-| 🎚️ | **Effects** — radio filter, reverb, bitcrush, echo and more, per state. Make the Avenger sound like a beaten-up field radio in two clicks. |
-| 📦 | **Music Addons** — subscribe to Workshop music packs and flick them on and off. |
-| 🎧 | **Spotify** *(experimental)* — pin a playlist to each screen. Needs Premium and your own API keys. |
-| 🔄 | **Self-updating** — checks GitHub on startup, installs it for you, never touches your settings or music. |
-| 🎛️ | **Per-state everything** — volume, looping, random start, all remembered. |
+<table>
+<tr>
+<td width="42%"><img src="assets/img_effects.png" alt="Effects panel"></td>
+<td>
 
-[**→ Full feature tour**](https://github.com/emzakit/xcom_anarchyfm/wiki/Features)
+### 🎚️ Effects
+
+Radio filter, reverb, bass, chorus, bitcrush, echo — set per state, with
+presets. Want the Avenger sounding like a beaten-up field radio? Two clicks.
+
+**[Effects and per-state settings →](https://github.com/emzakit/xcom_anarchyfm/wiki/Features#the-buttons)**
+
+</td>
+</tr>
+<tr>
+<td width="42%"><img src="assets/img_spotify.png" alt="Spotify panel"></td>
+<td>
+
+### 🎧 Spotify *(experimental)*
+
+Pin a Spotify playlist to each screen. Needs Premium, the desktop app running,
+and your own API keys — it drives *your* account through *your* registration.
+
+**[Set up Spotify →](https://github.com/emzakit/xcom_anarchyfm/wiki/Spotify-setup)**
+
+</td>
+</tr>
+<tr>
+<td width="42%"><img src="assets/img_addons.png" alt="Music Addons panel"></td>
+<td>
+
+### 📦 Music Addons
+
+Subscribe to a Workshop music pack and it just turns up in your library. Flick
+packs on and off, sort by genre. Nothing gets copied to your drive.
+
+**[Music Addons →](https://github.com/emzakit/xcom_anarchyfm/wiki/Features#music-addons)**
+· **[Make your own →](addon_template/MODDING_GUIDE.md)**
+
+</td>
+</tr>
+</table>
+
+Plus **self-updating** (checks GitHub on startup, never touches your settings or
+music) and **per-state everything** — volume, looping, random start, all
+remembered between sessions.
 
 ---
 
@@ -98,16 +135,15 @@ mid-ramble. It's ridiculous and it's the best thing here.
 Everything past "run the exe" lives in the
 **[wiki](https://github.com/emzakit/xcom_anarchyfm/wiki)**.
 
-|   |   |
-|---|---|
-| ✨ | [Every feature, in detail](https://github.com/emzakit/xcom_anarchyfm/wiki/Features) |
-| 🔧 | [Something's wrong](https://github.com/emzakit/xcom_anarchyfm/wiki/Troubleshooting) |
-| 🎧 | [Setting up Spotify](https://github.com/emzakit/xcom_anarchyfm/wiki/Spotify-setup) |
-| ⚙️ | [How it works / running from source](https://github.com/emzakit/xcom_anarchyfm/wiki/How-it-works) |
-| 🔨 | [Building the exe yourself](https://github.com/emzakit/xcom_anarchyfm/wiki/Building-the-exe) |
-| 📝 | [Changelog](https://github.com/emzakit/xcom_anarchyfm/wiki/Changelog) |
-| 📂 | [Using the music folders](music/music_readme.md) |
-| 🛠️ | [Making your own music pack](addon_template/MODDING_GUIDE.md) |
+|   |   |   |
+|---|---|---|
+| 📂 | [Using the music folders](music/music_readme.md) | Which folder scores which screen |
+| ✨ | [Every feature, in detail](https://github.com/emzakit/xcom_anarchyfm/wiki/Features) | The full tour |
+| 🔧 | [Something's wrong](https://github.com/emzakit/xcom_anarchyfm/wiki/Troubleshooting) | Two soundtracks, no music, known bugs |
+| 🛠️ | [Making your own music pack](addon_template/MODDING_GUIDE.md) | Publish one to the Workshop |
+| ⚙️ | [How it works](https://github.com/emzakit/xcom_anarchyfm/wiki/How-it-works) | And running it from source |
+| 🔨 | [Building the exe](https://github.com/emzakit/xcom_anarchyfm/wiki/Building-the-exe) | If you'd rather compile it yourself |
+| 📝 | [Changelog](https://github.com/emzakit/xcom_anarchyfm/wiki/Changelog) | What changed, and when |
 
 ---
 
