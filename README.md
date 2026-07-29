@@ -55,6 +55,8 @@ You need both — MMS does the silencing, this does the music.
 right-click **XCOM 2 → Properties → Launch Options**. Without it, music plays
 over cinematics.
 
+In Alternate Mod Launcher add it in Active Arguments in Options > Settings
+
 **3.** **[Download the app](https://github.com/emzakit/xcom_anarchyfm/releases/latest)**,
 unzip it anywhere, and **run the exe.** A wizard walks you through the rest.
 
