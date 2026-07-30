@@ -72,6 +72,10 @@ def default_addon_test_folder():
     return data_path("addon_test")
 
 
+def default_addon_projects_folder():
+    return data_path("addon_projects")
+
+
 _ADDON_TEST_README = """Addon testing folder
 ====================
 
@@ -92,22 +96,59 @@ on and off like any other pack. Hit Save & Rescan after changing files.
 This is for checking a pack works before you publish it. Nothing in here is
 uploaded anywhere.
 
+Its sibling addon_projects/ is where the ModBuddy solution itself belongs.
+Keep the two apart: this folder holds BUILT packs, that one holds the project
+you build them from.
+
+Full guide: https://github.com/emzakit/xcom_anarchyfm/wiki/Making-a-music-pack
+"""
+
+_ADDON_PROJECTS_README = """Addon projects folder
+=====================
+
+Where your ModBuddy solutions live. Point ModBuddy at this folder under
+Tools > Options > Projects and Solutions, and every music pack you start
+lands here.
+
+Built packs go in the addon_test folder next door — that's the one Anarchy
+Radio FM watches. Keeping the project and the built copy apart means a
+rebuild can't half-overwrite something the app is reading.
+
 Full guide: https://github.com/emzakit/xcom_anarchyfm/wiki/Making-a-music-pack
 """
 
 
+def _write_readme(folder, text):
+    """Create `folder` and drop a README.txt in it if there isn't one."""
+    os.makedirs(folder, exist_ok=True)
+    readme = os.path.join(folder, "README.txt")
+    if not os.path.exists(readme):
+        with open(readme, "w", encoding="utf-8") as f:
+            f.write(text)
+
+
 def create_addon_test_folder(path):
-    """Create the addon test folder and drop a short README in it."""
+    """Create the addon testing folder, and a projects folder beside it.
+
+    They're a pair: one holds the ModBuddy solution, the other the built pack
+    the app plays from. Made together because someone setting up to author a
+    pack needs both, and putting the project inside the folder being scanned
+    is a good way to confuse yourself.
+    """
     if not path:
         return
     try:
-        os.makedirs(path, exist_ok=True)
-        readme = os.path.join(path, "README.txt")
-        if not os.path.exists(readme):
-            with open(readme, "w", encoding="utf-8") as f:
-                f.write(_ADDON_TEST_README)
+        _write_readme(path, _ADDON_TEST_README)
     except Exception as e:
         console.warn(f"Couldn't create the addon test folder: {e}")
+        return
+
+    try:
+        projects = os.path.join(os.path.dirname(os.path.abspath(path)),
+                                "addon_projects")
+        _write_readme(projects, _ADDON_PROJECTS_README)
+    except Exception as e:
+        console.debug(f"Couldn't create the addon projects folder: {e}")
 
 
 def _create_state_folders(music_folder):
