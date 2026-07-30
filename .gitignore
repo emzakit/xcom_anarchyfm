@@ -28,6 +28,13 @@ xipod_config.json
 music/_logs/
 *.log
 
+# --- Music pack authoring ---
+# Created next to the app on first run. addon_projects/ holds ModBuddy
+# solutions, addon_test/ holds built packs being tried out — someone else's
+# work in progress, not part of this repo.
+addon_test/
+addon_projects/
+
 # --- PyInstaller build output ---
 build/
 dist/
