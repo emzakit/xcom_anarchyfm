@@ -9,6 +9,23 @@ from PySide6.QtGui import QFont
 from gui.theme import FONT_FAMILY, PRIMARY, PRIMARY_DIM, BORDER
 
 
+def paint_own_background(widget):
+    """Make a QWidget subclass actually paint its stylesheet background.
+
+    Qt honours `background-color` from a stylesheet on stock QWidgets, but NOT
+    on a QWidget *subclass* — a subclass is assumed to do its own painting, so
+    the rule is silently ignored unless WA_StyledBackground is set.
+
+    Every window here is a QWidget subclass, so without this they never clear
+    their background: the window looks right while it sits still, then smears
+    stale pixels the moment you drag it, with fields going blank and labels
+    truncating mid-sentence.
+
+    Call once per top-level window, before the stylesheet is applied.
+    """
+    widget.setAttribute(Qt.WA_StyledBackground, True)
+
+
 def make_divider():
     line = QFrame()
     line.setObjectName("divider")

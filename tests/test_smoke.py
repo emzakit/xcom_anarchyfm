@@ -356,6 +356,110 @@ class TestMusicAddons(unittest.TestCase):
             json.dump(descriptor, f)
         return mod_root
 
+    def test_test_folder_packs_are_found_and_tagged(self):
+        """A pack under test loads exactly like a subscribed one, but is
+        flagged and id-prefixed so enabling the local copy can't flip the
+        published one's setting."""
+        with tempfile.TemporaryDirectory() as tmp:
+            workshop = os.path.join(tmp, "workshop")
+            testdir = os.path.join(tmp, "addon_test")
+            os.makedirs(workshop)
+            os.makedirs(testdir)
+
+            self._make_mod(workshop, "12345", {
+                "name": "Published Pack",
+                "folders": {"STATE_AVENGER": "music/avenger"},
+            }, {"music/avenger": ["a.mp3"]})
+            # Same folder name as the workshop one, to prove they don't collide.
+            self._make_mod(testdir, "12345", {
+                "name": "Work In Progress",
+                "folders": {"STATE_AVENGER": "music/avenger"},
+            }, {"music/avenger": ["b.mp3"]})
+
+            found = addons.scan(workshop, test_folder=testdir)
+            self.assertEqual(len(found), 2)
+
+            # Tested packs sort first — they're the ones being worked on.
+            self.assertTrue(found[0].is_test)
+            self.assertEqual(found[0].id, addons.TEST_ID_PREFIX + "12345")
+            self.assertEqual(found[0].name, "Work In Progress")
+
+            self.assertFalse(found[1].is_test)
+            self.assertEqual(found[1].id, "12345")
+
+            # Disabling the published one leaves the local copy alone.
+            off = addons.scan(workshop, {"12345": False}, test_folder=testdir)
+            by_id = {a.id: a for a in off}
+            self.assertFalse(by_id["12345"].enabled)
+            self.assertTrue(by_id[addons.TEST_ID_PREFIX + "12345"].enabled)
+
+    def test_test_folder_finds_nested_modbuddy_project(self):
+        """ModBuddy wraps a project in a solution folder of the same name, so
+        a freshly created pack sits a level deeper than a workshop one. It has
+        to be found there, and enabled without being touched first."""
+        with tempfile.TemporaryDirectory() as tmp:
+            testdir = os.path.join(tmp, "addon_test")
+            nested = os.path.join(testdir, "MyPack")   # solution folder
+            os.makedirs(nested)
+            self._make_mod(nested, "MyPack", {        # project folder inside
+                "name": "Nested Pack",
+                "folders": {"STATE_AVENGER": "music/avenger"},
+            }, {"music/avenger": ["a.mp3"]})
+
+            found = addons.scan("", test_folder=testdir)
+            self.assertEqual(len(found), 1)
+            self.assertEqual(found[0].name, "Nested Pack")
+            self.assertTrue(found[0].is_test)
+            self.assertTrue(found[0].enabled, "a pack just dropped in must be on")
+            self.assertEqual(found[0].folders_resolved(), ["state_avenger"])
+
+    def test_workshop_subscribed_mods_stay_shallow(self):
+        """A Steam-installed mod folder is named after the numeric workshop id
+        and always holds its descriptor at the root. Those must NOT get a deep
+        walk — thousands of them is what made startup crawl."""
+        with tempfile.TemporaryDirectory() as tmp:
+            workshop = os.path.join(tmp, "workshop")
+            buried = os.path.join(workshop, "12345", "extra")
+            os.makedirs(buried)
+            self._make_mod(buried, "deep", {
+                "name": "Too Deep",
+                "folders": {"STATE_AVENGER": "music/avenger"},
+            }, {"music/avenger": ["a.mp3"]})
+            self.assertEqual(addons.scan(workshop), [])
+
+    def test_hand_placed_workshop_folder_is_searched_deeper(self):
+        """A folder someone copied into the workshop directory themselves is
+        named whatever they liked, not a numeric id — and may well be a nested
+        ModBuddy project. Those get found."""
+        with tempfile.TemporaryDirectory() as tmp:
+            workshop = os.path.join(tmp, "workshop")
+            nested = os.path.join(workshop, "MyPack")   # solution folder
+            os.makedirs(nested)
+            self._make_mod(nested, "MyPack", {          # project folder inside
+                "name": "Hand Placed",
+                "folders": {"STATE_AVENGER": "music/avenger"},
+            }, {"music/avenger": ["a.mp3"]})
+
+            found = addons.scan(workshop)
+            self.assertEqual(len(found), 1)
+            self.assertEqual(found[0].name, "Hand Placed")
+            self.assertEqual(found[0].id, "MyPack")
+            self.assertFalse(found[0].is_test)
+            self.assertTrue(found[0].enabled)
+
+    def test_no_test_folder_behaves_as_before(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workshop = os.path.join(tmp, "workshop")
+            os.makedirs(workshop)
+            self._make_mod(workshop, "12345", {
+                "name": "Pack", "folders": {"STATE_AVENGER": "music/avenger"},
+            }, {"music/avenger": ["a.mp3"]})
+
+            self.assertEqual(len(addons.scan(workshop)), 1)
+            self.assertEqual(len(addons.scan(workshop, test_folder="")), 1)
+            self.assertEqual(
+                len(addons.scan(workshop, test_folder="/does/not/exist")), 1)
+
     def test_scan_parses_metadata_and_guards_bad_folders(self):
         with tempfile.TemporaryDirectory() as tmp:
             workshop = os.path.join(tmp, "workshop")

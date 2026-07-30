@@ -3,6 +3,7 @@
 import os
 import subprocess
 import threading
+import webbrowser
 
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
@@ -18,17 +19,22 @@ from library import RADIO_SOURCE_RADIO, RADIO_SOURCE_STATE, RADIO_SOURCE_BOTH
 from log_watcher import Bridge
 from setup import discover_addons, save_config, _create_state_folders
 from gui.theme import FONT_FAMILY, PRIMARY, PRIMARY_DIM, ACCENT, STYLESHEET
-from gui.helpers import make_divider, html_escape
+from gui.helpers import make_divider, html_escape, paint_own_background
 from gui.log_hooks import log_signal
 from gui.options import OptionsDialog
 from gui.effects import EffectsDialog
-from gui.mod_scaffold import scaffold_music_mod, safe_mod_name
 import console
 import process_utils
 import updater
 import version
 
 from paths import resource_path
+
+# Where the "Make a Music Pack" button sends people. Building a pack is a
+# manual job through the XCOM 2 SDK now — see _on_create_music_mod.
+MUSIC_PACK_GUIDE_URL = (
+    "https://github.com/emzakit/xcom_anarchyfm/wiki/Making-a-music-pack"
+)
 
 # Bundled artwork (frozen-build aware — see paths.py). The banner doubles
 # as the window/tray icon — it's square, and Qt scales it down cleanly.
@@ -47,6 +53,7 @@ class XiPodWindow(QWidget):
 
     def __init__(self, cfg):
         super().__init__()
+        paint_own_background(self)
         self.cfg = cfg
         self.engine = None
         self.bridge = None
@@ -99,7 +106,7 @@ class XiPodWindow(QWidget):
             ("Options",       self._on_options),
             ("Effects",       self._on_effects),
             ("Music Folder",  self._on_open_music_folder),
-            ("Create Mod",    self._on_create_music_mod),
+            ("Make a Pack",   self._on_create_music_mod),
             ("Spotify",       self._on_spotify),
             ("Music Addons",  self._on_addons),
         ]):
@@ -576,34 +583,18 @@ class XiPodWindow(QWidget):
             console.warn("Music folder not found. Set it in Options first.")
 
     def _on_create_music_mod(self):
-        name, ok = QInputDialog.getText(
-            self, "Create Music Addon",
-            "Mod name  (letters, numbers and underscores):",
-            text="MyMusicPack",
-        )
-        if not ok or not name.strip():
-            return
-        safe = safe_mod_name(name)
-        if safe != name.strip():
-            console.warn(f"Name tidied to '{safe}' — Unreal can't use spaces or punctuation.")
+        """Open the guide rather than stamping a mod project out.
 
-        folder = QFileDialog.getExistingDirectory(
-            self, "Where should the mod project go?"
-        )
-        if not folder:
-            return
-
-        try:
-            created = scaffold_music_mod(folder, safe)
-        except Exception as e:
-            console.error(f"Couldn't create the mod project: {e}")
-            QMessageBox.warning(self, "Couldn't create mod project", str(e))
-            return
-
-        console.shen(f"Music addon scaffolded at: {created}")
-        console.shen("Drop your audio into the music/STATE_* folders, then edit "
-                     "the _xipod.json and publish from ModBuddy.")
-        subprocess.Popen(["explorer", os.path.normpath(created)])
+        This used to scaffold a complete, ready-to-publish ModBuddy project in
+        one click. Two reasons it doesn't any more: the scaffolding was flaky,
+        and a button that packages someone's mp3s for redistribution is a very
+        different thing from a page explaining how to do it yourself. Making
+        the packs is still entirely possible — it's just a deliberate act by
+        the person doing it, with their own SDK and their own judgement about
+        what they're allowed to upload.
+        """
+        console.shen("Opening the music pack guide in your browser.")
+        webbrowser.open(MUSIC_PACK_GUIDE_URL)
 
     # ------------------------------------------------------------ #
     #  Transport + Toggles

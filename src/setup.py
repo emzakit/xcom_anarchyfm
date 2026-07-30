@@ -59,6 +59,57 @@ def save_config(cfg):
 #  Folder Structure
 # ------------------------------------------------------------------ #
 
+# Default locations, both sitting next to the exe (or the project root when
+# running from source). Keeping them beside the app means the whole thing is
+# portable — copy the folder to another drive and your music comes with it —
+# and it means first-run setup has something sensible to offer instead of an
+# empty box the user has to think about.
+def default_music_folder():
+    return data_path("music")
+
+
+def default_addon_test_folder():
+    return data_path("addon_test")
+
+
+_ADDON_TEST_README = """Addon testing folder
+====================
+
+Drop an in-progress music pack in here — the whole mod folder, the one with
+the *_xipod.json descriptor in it — and Anarchy Radio FM will pick it up
+exactly as if you'd subscribed to it on the Workshop.
+
+    addon_test/
+        MyMusicPack/
+            MyMusicPack_xipod.json
+            music/
+                STATE_AVENGER/
+                    track.mp3
+
+It shows up in the Music Addons panel with a TEST tag, and you can switch it
+on and off like any other pack. Hit Save & Rescan after changing files.
+
+This is for checking a pack works before you publish it. Nothing in here is
+uploaded anywhere.
+
+Full guide: https://github.com/emzakit/xcom_anarchyfm/wiki/Making-a-music-pack
+"""
+
+
+def create_addon_test_folder(path):
+    """Create the addon test folder and drop a short README in it."""
+    if not path:
+        return
+    try:
+        os.makedirs(path, exist_ok=True)
+        readme = os.path.join(path, "README.txt")
+        if not os.path.exists(readme):
+            with open(readme, "w", encoding="utf-8") as f:
+                f.write(_ADDON_TEST_README)
+    except Exception as e:
+        console.warn(f"Couldn't create the addon test folder: {e}")
+
+
 def _create_state_folders(music_folder):
     """Create all expected state subfolders in the music library."""
     created = 0
@@ -88,6 +139,7 @@ def discover_addons(cfg):
     return addons.scan(
         cfg.get("workshop_folder", ""),
         addons.load_enabled_map(CONFIG_PATH),
+        test_folder=cfg.get("addon_test_folder", ""),
     )
 
 

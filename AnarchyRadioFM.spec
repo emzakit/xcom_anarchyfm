@@ -27,12 +27,15 @@ a = Analysis(
         # (source, dest-folder-inside-bundle) — read via paths.resource_path()
         ("xipod_defaults.json", "."),
         ("assets/banner.png", "assets"),
-        # ModBuddy project template stamped out by the Create Mod button.
-        # Tree() keeps the folder structure; .XCOM_suo is ModBuddy's per-user
-        # state and has no business shipping.
-        *[(os.path.join(dp, f), os.path.join("addon_template", os.path.relpath(dp, "addon_template")))
-          for dp, _dn, fn in os.walk(os.path.join("addon_template", "ModName_xipod"))
-          for f in fn if not f.lower().endswith((".xcom_suo", ".user"))],
+        # Checkbox tick — referenced by url() from the stylesheet, so it has
+        # to exist on disk at runtime rather than being imported.
+        ("assets/check_x.svg", "assets"),
+        # The ModBuddy project template used to ship here, for the Create Mod
+        # button to stamp out. That button now opens the guide instead, so
+        # nothing reads the template at runtime and it has no reason to be in
+        # the bundle. It still lives in the repo for anyone following the
+        # guide. (It also carried Windows ReadOnly directory attributes, which
+        # made every rebuild after the first fail on cleaning dist/.)
     ],
     hiddenimports=[],
     hookspath=[],

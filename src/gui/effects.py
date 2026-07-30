@@ -9,7 +9,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 
 from gui.theme import FONT_FAMILY, PRIMARY, PRIMARY_DIM
-from gui.helpers import make_divider
+from gui.helpers import make_divider, paint_own_background
 from settings import get_preset_lists
 
 
@@ -81,6 +81,7 @@ class EffectsDialog(QWidget):
 
     def __init__(self, engine, parent=None):
         super().__init__(parent)
+        paint_own_background(self)
         self.engine = engine
         self.setWindowTitle("AFM — Effects")
         self.setMinimumSize(600, 620)

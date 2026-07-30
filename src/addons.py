@@ -32,13 +32,20 @@ import console
 DESCRIPTOR_SUFFIX = "_xipod.json"
 
 
+# Test addons get their id prefixed so they can never collide with a workshop
+# id, and so enabling a local copy doesn't silently flip the published one.
+TEST_ID_PREFIX = "test::"
+
+
 class Addon:
     """One discovered music pack."""
 
-    def __init__(self, addon_id, root, descriptor_path, data):
+    def __init__(self, addon_id, root, descriptor_path, data, is_test=False):
         self.id = addon_id                  # workshop folder name (stable id)
         self.root = root                    # absolute path to the mod folder
         self.descriptor_path = descriptor_path
+        # Came from the local testing folder rather than the Workshop.
+        self.is_test = is_test
 
         self.name = (data.get("name") or addon_id).strip()
         self.author = (data.get("author") or "").strip()
@@ -103,49 +110,116 @@ def _read_descriptor(path):
         return None
 
 
-def scan(workshop_folder, enabled_map=None):
-    """Find every music addon in the workshop folder.
+def _find_descriptor(folder):
+    """The descriptor file directly inside `folder`, or None."""
+    try:
+        for fname in sorted(os.listdir(folder)):
+            if fname.lower().endswith(DESCRIPTOR_SUFFIX):
+                return os.path.join(folder, fname)
+    except OSError:
+        pass
+    return None
+
+
+# How far to search inside a folder someone placed by hand. A ModBuddy
+# solution wraps the project in another folder of the same name, so a freshly
+# built pack sits one level lower than a subscribed one; a little slack past
+# that costs nothing and saves a "why isn't it showing up".
+_HAND_PLACED_DEPTH = 3
+
+
+def _is_workshop_id(name):
+    """True for a folder Steam created — those are always the numeric id."""
+    return name.isdigit()
+
+
+def _scan_root(root, enabled_map, is_test, label, depth_for):
+    """Collect addons from a folder of mod folders.
+
+    `depth_for(entry_name)` says how many levels to search beneath that
+    top-level entry. That's per-entry rather than global because the workshop
+    folder holds two different things:
+
+      * Folders Steam made, named after the numeric workshop id. The
+        descriptor is always in the root of those, and a deep walk over
+        thousands of subscribed mods is what made startup crawl.
+      * Folders someone dropped in by hand, which are named whatever they
+        liked and may well be a nested ModBuddy project.
+
+    Descending only into the second kind gets hand-placed packs working for
+    free — a real subscribed mod is never searched any deeper than before.
+    """
+    found = []
+    if not root or not os.path.isdir(root):
+        return found
+
+    try:
+        queue = [(os.path.join(root, e), depth_for(e))
+                 for e in sorted(os.listdir(root))]
+    except OSError as e:
+        console.warn(f"Couldn't read {label}: {e}")
+        return found
+
+    while queue:
+        folder, remaining = queue.pop(0)
+        if not os.path.isdir(folder):
+            continue
+
+        descriptor = _find_descriptor(folder)
+        if descriptor:
+            data = _read_descriptor(descriptor)
+            if data is not None:
+                entry = os.path.basename(folder)
+                addon_id = (TEST_ID_PREFIX + entry) if is_test else entry
+                addon = Addon(addon_id, folder, descriptor, data, is_test=is_test)
+                # Absent from the map = enabled. Dropping a pack in should
+                # just work, without a trip to a settings screen first.
+                addon.enabled = bool(enabled_map.get(addon_id, True))
+                found.append(addon)
+            # Found the pack — its own subfolders are music, not more packs.
+            continue
+
+        if remaining > 1:
+            try:
+                queue.extend((os.path.join(folder, e), remaining - 1)
+                             for e in sorted(os.listdir(folder)))
+            except OSError:
+                pass
+
+    return found
+
+
+def scan(workshop_folder, enabled_map=None, test_folder=""):
+    """Find every music addon in the workshop folder, plus any being tested.
 
     Only looks one level deep — descriptors live in each mod's root, and a
     full walk over thousands of workshop mods made startup crawl.
 
-    Returns a list of Addon, sorted by name.
+    `test_folder` is the optional local folder a pack author drops an
+    in-progress mod into, so it can be played in-game before it goes anywhere
+    near the Workshop. Same layout, same descriptor; the only difference is
+    where it came from.
+
+    Returns a list of Addon, sorted by name, with tested packs first — they're
+    the ones being actively worked on, so they belong at the top of the list.
     """
     enabled_map = enabled_map or {}
-    addons = []
 
-    if not workshop_folder or not os.path.isdir(workshop_folder):
-        return addons
+    addons = _scan_root(
+        workshop_folder, enabled_map, False, "workshop folder",
+        # Subscribed mods keep the old shallow scan; anything dropped in by
+        # hand gets searched properly. See _scan_root.
+        depth_for=lambda name: 1 if _is_workshop_id(name) else _HAND_PLACED_DEPTH,
+    )
+    tested = _scan_root(
+        test_folder, enabled_map, True, "addon test folder",
+        depth_for=lambda name: _HAND_PLACED_DEPTH,
+    )
+    if tested:
+        console.shen(f"Addon testing: found {len(tested)} local pack(s).")
+    addons.extend(tested)
 
-    try:
-        entries = os.listdir(workshop_folder)
-    except OSError as e:
-        console.warn(f"Couldn't read workshop folder: {e}")
-        return addons
-
-    for entry in entries:
-        mod_root = os.path.join(workshop_folder, entry)
-        if not os.path.isdir(mod_root):
-            continue
-        try:
-            files = os.listdir(mod_root)
-        except OSError:
-            continue
-
-        for fname in files:
-            if not fname.lower().endswith(DESCRIPTOR_SUFFIX):
-                continue
-            path = os.path.join(mod_root, fname)
-            data = _read_descriptor(path)
-            if data is None:
-                continue
-            addon = Addon(entry, mod_root, path, data)
-            # Absent from the map = enabled. Subscribing should just work.
-            addon.enabled = bool(enabled_map.get(entry, True))
-            addons.append(addon)
-            break   # one descriptor per mod
-
-    addons.sort(key=lambda a: a.name.lower())
+    addons.sort(key=lambda a: (not a.is_test, a.name.lower()))
     return addons
 
 

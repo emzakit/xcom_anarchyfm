@@ -14,7 +14,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 
 from gui.theme import FONT_FAMILY, PRIMARY, PRIMARY_DIM, PRIMARY_FAINT, AMBER, ACCENT
-from gui.helpers import make_divider
+from gui.helpers import make_divider, paint_own_background
 import console
 import updater
 import version
@@ -29,6 +29,7 @@ class UpdateDialog(QWidget):
 
     def __init__(self, release, on_skip=None, parent=None):
         super().__init__(parent)
+        paint_own_background(self)
         self.release = release
         self._on_skip = on_skip
         self._busy = False

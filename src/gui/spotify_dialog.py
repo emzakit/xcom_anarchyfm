@@ -16,7 +16,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 
 from gui.theme import FONT_FAMILY, PRIMARY, PRIMARY_DIM, PRIMARY_FAINT, AMBER, ACCENT
-from gui.helpers import make_divider
+from gui.helpers import make_divider, paint_own_background
 from spotify import BINDABLE_STATES, DEFAULT_REDIRECT, parse_context_uri
 import console
 
@@ -40,6 +40,7 @@ class SpotifyDialog(QWidget):
 
     def __init__(self, controller, parent=None):
         super().__init__(parent)
+        paint_own_background(self)
         self.sp = controller
         self.setWindowTitle("AFM — Spotify (Experimental)")
         self.setMinimumSize(620, 720)

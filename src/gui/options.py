@@ -5,14 +5,15 @@ import os
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QFileDialog, QSpinBox,
+    QScrollArea, QFrame,
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 
 from gui.theme import FONT_FAMILY, PRIMARY, PRIMARY_DIM, PRIMARY_FAINT, AMBER, BORDER
-from gui.helpers import make_divider, path_row
+from gui.helpers import make_divider, path_row, paint_own_background
 from setup import save_config, _create_state_folders, _find_game_config_folder
-from setup import find_log_path_silent
+from setup import find_log_path_silent, create_addon_test_folder
 import console
 
 
@@ -22,11 +23,19 @@ class OptionsDialog(QWidget):
 
     def __init__(self, cfg, engine=None, parent=None):
         super().__init__(parent)
+        paint_own_background(self)
         self.cfg = cfg
         self.engine = engine
         self.setWindowTitle("AFM — Options")
-        self.setMinimumWidth(580)
-        self.setFixedHeight(560)
+        # Deliberately NOT a fixed height. Every description here is a
+        # word-wrapped label, which means its height depends on its width; pin
+        # the window shorter than the content needs and the layout has two
+        # states it can settle into, flipping between them on any relayout —
+        # which looks like the dialog scrambling itself when you drag it.
+        # A scroll area plus a resizable window means adding another row later
+        # can't bring that back.
+        self.setMinimumSize(600, 480)
+        self.resize(620, 760)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(20, 16, 20, 16)
@@ -39,16 +48,28 @@ class OptionsDialog(QWidget):
         root.addWidget(make_divider())
         root.addSpacing(8)
 
+        # Everything between the title and the buttons scrolls.
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        inner = QWidget()
+        form = QVBoxLayout(inner)
+        form.setContentsMargins(0, 0, 8, 0)   # room for the scrollbar
+        form.setSpacing(4)
+        scroll.setWidget(inner)
+        root.addWidget(scroll, 1)
+
         # --- Music Folder ---
         self.music_field = path_row(
-            root, "Music Library Folder",
+            form, "Music Library Folder",
             "Where Anarchy Radio FM stores your music. State folders are created automatically.",
             self._browse_music, cfg.get("music_folder", ""),
         )
 
         # --- Game Executable ---
         self.exe_field = path_row(
-            root, "Game Launcher / AML",
+            form, "Game Launcher / AML",
             "Your game .exe or Alternative Mod Launcher.",
             self._browse_exe, cfg.get("game_exe", ""),
         )
@@ -56,31 +77,40 @@ class OptionsDialog(QWidget):
         # --- Log Path ---
         default_log = r"%USERPROFILE%\Documents\my games\XCOM2 War of the Chosen\XComGame\Logs\Launch.log"
         self.log_field = path_row(
-            root, "XCOM 2 Log File",
+            form, "XCOM 2 Log File",
             f"Default: {default_log}",
             self._browse_log, cfg.get("log_path", ""),
         )
 
         # --- Workshop Folder ---
         self.workshop_field = path_row(
-            root, "Workshop Folder  (optional)",
-            r"For community music packs.  <Steam>\steamapps\workshop\content\268500",
+            form, "Workshop Folder  (required)",
+            "How I find the installed mod — without it the game's own music "
+            r"won't be silenced.  <Steam>\steamapps\workshop\content\268500",
             self._browse_folder, cfg.get("workshop_folder", ""),
         )
 
         # --- Game Config Folder ---
         self.config_field = path_row(
-            root, "Game Config Folder",
-            "Where XCOM 2 stores user settings. Anarchy Radio FM writes MMS overrides here.",
+            form, "Game Config Folder",
+            "Where XCOM 2 stores user settings, shared with the in-game MCM menu.",
             self._browse_folder, cfg.get("game_config_folder", ""),
         )
 
+        # --- Addon Testing Folder ---
+        self.addon_test_field = path_row(
+            form, "Addon Testing Folder  (optional)",
+            "Building a music pack? Drop the in-progress mod folder in here and "
+            "it plays in-game as though you'd subscribed to it on the Workshop.",
+            self._browse_folder, cfg.get("addon_test_folder", ""),
+        )
+
         # --- Radio Mode chunk length ---
-        root.addSpacing(10)
+        form.addSpacing(10)
         chunk_lbl = QLabel("Radio Mode: minutes before re-tuning")
         chunk_lbl.setFont(QFont(FONT_FAMILY, 12, QFont.Bold))
         chunk_lbl.setStyleSheet(f"color: {PRIMARY};")
-        root.addWidget(chunk_lbl)
+        form.addWidget(chunk_lbl)
 
         chunk_desc = QLabel(
             "How long a stretch Radio Mode plays before jumping to a fresh "
@@ -91,7 +121,7 @@ class OptionsDialog(QWidget):
         chunk_desc.setWordWrap(True)
         chunk_desc.setFont(QFont(FONT_FAMILY, 10))
         chunk_desc.setStyleSheet(f"color: {PRIMARY_DIM};")
-        root.addWidget(chunk_desc)
+        form.addWidget(chunk_desc)
 
         chunk_row = QHBoxLayout()
         self.chunk_spin = QSpinBox()
@@ -102,9 +132,12 @@ class OptionsDialog(QWidget):
         self.chunk_spin.setFixedWidth(120)
         chunk_row.addWidget(self.chunk_spin)
         chunk_row.addStretch()
-        root.addLayout(chunk_row)
+        form.addLayout(chunk_row)
 
-        root.addStretch()
+        # Keeps the rows packed at the top of the scroll body instead of
+        # spreading out when the window is taller than the content.
+        form.addStretch()
+
         root.addWidget(make_divider())
         root.addSpacing(8)
 
@@ -168,6 +201,7 @@ class OptionsDialog(QWidget):
         log = self.log_field.text().strip()
         workshop = self.workshop_field.text().strip()
         config_dir = self.config_field.text().strip()
+        addon_test = self.addon_test_field.text().strip()
 
         if not music:
             self.status.setText("SHEN:  I need a music folder, Commander.")
@@ -200,11 +234,16 @@ class OptionsDialog(QWidget):
                 return
         _create_state_folders(music)
 
+        # Optional — an empty box means "not a pack author", not an error.
+        if addon_test:
+            create_addon_test_folder(addon_test)
+
         self.cfg["music_folder"] = music
         self.cfg["game_exe"] = exe
         self.cfg["log_path"] = log
         self.cfg["workshop_folder"] = workshop
         self.cfg["game_config_folder"] = config_dir
+        self.cfg["addon_test_folder"] = addon_test
         self.cfg["radio_chunk_minutes"] = int(self.chunk_spin.value())
         save_config(self.cfg)
 

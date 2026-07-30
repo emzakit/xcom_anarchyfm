@@ -51,11 +51,35 @@ No conversions. No renaming. No ffmpeg. Just files in folders and an exe.
 and **[Music Modding System](https://steamcommunity.com/workshop/filedetails/?id=757398474)**.
 You need both — MMS does the silencing, this does the music.
 
-**2.** Add **`-forcelogflush`** to XCOM 2's launch options — in Steam,
-right-click **XCOM 2 → Properties → Launch Options**. Without it, music plays
-over cinematics.
+**2.** Add **`-forcelogflush`** to XCOM 2's launch options. Without it, music
+plays over cinematics.
 
-In Alternate Mod Launcher add it in Active Arguments in Options > Settings
+<details>
+<summary><strong>Show me exactly where →</strong>&nbsp; (Steam, and the Alternative Mod Launcher)</summary>
+
+<br>
+
+**Steam** — right-click **XCOM 2 → Properties → General → Launch Options**, and
+type it into the box at the bottom.
+
+<table>
+<tr>
+<td width="50%"><img src="assets/img_inst_forceflush_xcom_launcher_01.png" alt="Right-click XCOM 2 in your Steam library and choose Properties"></td>
+<td width="50%"><img src="assets/img_inst_forceflush_xcom_launcher_02.png" alt="Type -forcelogflush into the Launch Options box"></td>
+</tr>
+</table>
+
+**Alternative Mod Launcher** — **Options → Settings → Active arguments**. Add it
+to the **end** of the arguments already there; don't replace the line.
+
+<table>
+<tr>
+<td width="50%"><img src="assets/img_inst_forceflush_aml_launcher_01.png" alt="AML Options menu, Settings"></td>
+<td width="50%"><img src="assets/img_inst_forceflush_aml_launcher_02.png" alt="-forcelogflush added to the end of Active arguments"></td>
+</tr>
+</table>
+
+</details>
 
 **3.** **[Download the app](https://github.com/emzakit/xcom_anarchyfm/releases/latest)**,
 unzip it anywhere, and **run the exe.** A wizard walks you through the rest.
@@ -125,7 +149,7 @@ Subscribe to a Workshop music pack and it just turns up in your library. Flick
 packs on and off, sort by genre. Nothing gets copied to your drive.
 
 **[Music Addons →](https://github.com/emzakit/xcom_anarchyfm/wiki/Features#music-addons)**
-· **[Make your own →](addon_template/MODDING_GUIDE.md)**
+· **[Make your own →](https://github.com/emzakit/xcom_anarchyfm/wiki/Making-a-music-pack)**
 
 </td>
 </tr>
@@ -147,7 +171,7 @@ Everything past "run the exe" lives in the
 | 📂 | [Using the music folders](music/music_readme.md) | Which folder scores which screen |
 | ✨ | [Every feature, in detail](https://github.com/emzakit/xcom_anarchyfm/wiki/Features) | The full tour |
 | 🔧 | [Something's wrong](https://github.com/emzakit/xcom_anarchyfm/wiki/Troubleshooting) | Two soundtracks, no music, known bugs |
-| 🛠️ | [Making your own music pack](addon_template/MODDING_GUIDE.md) | Publish one to the Workshop |
+| 🛠️ | [Making your own music pack](https://github.com/emzakit/xcom_anarchyfm/wiki/Making-a-music-pack) | Publish one to the Workshop |
 | ⚙️ | [How it works](https://github.com/emzakit/xcom_anarchyfm/wiki/How-it-works) | And running it from source |
 | 🔨 | [Building the exe](https://github.com/emzakit/xcom_anarchyfm/wiki/Building-the-exe) | If you'd rather compile it yourself |
 | 📝 | [Changelog](https://github.com/emzakit/xcom_anarchyfm/wiki/Changelog) | What changed, and when |

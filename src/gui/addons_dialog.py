@@ -19,7 +19,7 @@ from PySide6.QtGui import QFont
 from gui.theme import (
     FONT_FAMILY, PRIMARY, PRIMARY_DIM, PRIMARY_FAINT, AMBER, ACCENT, BORDER,
 )
-from gui.helpers import make_divider
+from gui.helpers import make_divider, paint_own_background
 import console
 
 
@@ -36,6 +36,7 @@ class AddonsDialog(QWidget):
 
     def __init__(self, engine, config_path, parent=None):
         super().__init__(parent)
+        paint_own_background(self)
         self.engine = engine
         self.config_path = config_path
         self.addons = list(engine.addons or [])
@@ -205,6 +206,20 @@ class AddonsDialog(QWidget):
         cb.toggled.connect(lambda on, a=addon: self._on_toggle(a, on))
         self._checkboxes[addon.id] = cb
         top.addWidget(cb)
+
+        # A local pack under test looks identical to a subscribed one
+        # otherwise, and confusing the two while you're mid-edit is a good way
+        # to waste an evening.
+        if getattr(addon, "is_test", False):
+            tag = QLabel("TEST")
+            tag.setToolTip("From your addon testing folder — not published.")
+            tag.setStyleSheet(
+                f"color: {AMBER}; font-size: 10px; font-weight: bold; "
+                f"border: 1px solid {AMBER}; border-radius: 3px; padding: 0px 4px;"
+            )
+            top.addSpacing(6)
+            top.addWidget(tag)
+
         top.addStretch()
 
         count = QLabel(f"{addon.track_count} track{'' if addon.track_count == 1 else 's'}")

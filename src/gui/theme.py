@@ -24,6 +24,13 @@ MUTED         = "#3d5560"   # log noise — readable, but recedes into the panel
 
 FONT_FAMILY = "Consolas"
 
+# Checkbox tick mark. Qt wants forward slashes in stylesheet url()s even on
+# Windows, and a bare drive-letter path with backslashes silently fails to
+# load — leaving a checkbox that looks identical on and off.
+from paths import resource_path
+
+_CHECK_X = resource_path("assets", "check_x.svg").replace("\\", "/")
+
 STYLESHEET = f"""
 QWidget {{
     background-color: {BG};
@@ -180,9 +187,14 @@ QCheckBox::indicator {{
     border-radius: 3px;
     background-color: {BG_FIELD};
 }}
+/* Checked draws an X rather than a solid fill — a filled block reads as
+   "disabled" or "greyed out" at a glance on a dark theme, where an X can only
+   mean on. It has to come from an image file: Qt stylesheets can't stroke a
+   shape, and they don't take data: URIs either. */
 QCheckBox::indicator:checked {{
-    background-color: {PRIMARY_DIM};
+    background-color: {BG_FIELD};
     border: 1px solid {PRIMARY};
+    image: url("{_CHECK_X}");
 }}
 QCheckBox::indicator:hover {{
     border: 1px solid {PRIMARY_DIM};

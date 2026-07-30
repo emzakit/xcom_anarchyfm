@@ -7,7 +7,7 @@ import subprocess
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QLineEdit, QFileDialog,
-    QFrame, QMessageBox, QSizePolicy, QSpinBox,
+    QFrame, QMessageBox, QSizePolicy, QSpinBox, QScrollArea,
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont, QPixmap
@@ -16,10 +16,12 @@ from setup import (
     config_exists, load_config, save_config,
     _create_state_folders, _find_game_config_folder,
     find_log_path_silent, find_workshop_folder,
+    default_music_folder, default_addon_test_folder, create_addon_test_folder,
 )
 import mms_packs
 # Shared look & feel — one stylesheet for the whole app (see gui/theme.py).
 from gui.theme import STYLESHEET, FONT_FAMILY, PRIMARY, PRIMARY_DIM, AMBER
+from gui.helpers import paint_own_background
 
 
 # ------------------------------------------------------------------ #
@@ -42,8 +44,15 @@ class SetupWindow(QWidget):
 
     def __init__(self, existing_cfg=None):
         super().__init__()
+        paint_own_background(self)
         self.setWindowTitle("AFM Setup")
-        self.setFixedSize(620, 900)
+        # Not a fixed size. The step descriptions are word-wrapped labels, so
+        # their height depends on their width — pin the window shorter than
+        # the content wants and the layout has two states it can settle into,
+        # flipping between them on any relayout. 900px was also taller than a
+        # 1080p screen comfortably allows once the taskbar is there.
+        self.setMinimumSize(620, 520)
+        self.resize(640, 880)
         self.result_cfg = None  # set on success
 
         root = QVBoxLayout(self)
@@ -74,43 +83,67 @@ class SetupWindow(QWidget):
         root.addWidget(self._divider())
         root.addSpacing(14)
 
+        # The steps scroll; the Launch button and status stay pinned at the
+        # bottom where they can always be reached.
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        steps = QWidget()
+        form = QVBoxLayout(steps)
+        form.setContentsMargins(0, 0, 8, 0)   # room for the scrollbar
+        form.setSpacing(0)
+        scroll.setWidget(steps)
+        root.addWidget(scroll, 1)
+
         # --- 1. Game Executable ---
-        root.addWidget(self._section_label(
+        form.addWidget(self._section_label(
             "Step 1 — Game Launcher",
             "Pick your game .exe or mod manager (Alternative Mod Launcher, etc.)."
         ))
-        self.exe_field = self._path_row(root, "Browse...", self._browse_exe)
-        root.addSpacing(14)
+        self.exe_field = self._path_row(form, "Browse...", self._browse_exe)
+        form.addSpacing(14)
 
         # --- 2. Music Folder ---
-        root.addWidget(self._section_label(
+        form.addWidget(self._section_label(
             "Step 2 — Music Library Folder",
-            "Where to set up the music folders. Drop your tracks inside them."
+            "Where to set up the music folders. Drop your tracks inside them. "
+            "Defaults to a 'music' folder next to this app — fine to leave as is."
         ))
-        self.music_field = self._path_row(root, "Browse...", self._browse_music,
+        self.music_field = self._path_row(form, "Browse...", self._browse_music,
                                           extra_btn=("Open", self._open_music_folder))
-        root.addSpacing(14)
+        form.addSpacing(14)
 
         # --- 3. Workshop Folder ---
-        root.addWidget(self._section_label(
+        form.addWidget(self._section_label(
             "Step 3 — Workshop Folder",
             "Needed to find the installed mod — without it the game's own music "
             "won't be silenced.  <Steam>\\steamapps\\workshop\\content\\268500"
         ))
-        self.workshop_field = self._path_row(root, "Browse...", self._browse_workshop)
-        root.addSpacing(14)
+        self.workshop_field = self._path_row(form, "Browse...", self._browse_workshop)
+        form.addSpacing(14)
 
         # --- 4. Game Config Folder ---
-        root.addWidget(self._section_label(
+        form.addWidget(self._section_label(
             "Step 4 — Game Config Folder",
-            "Where XCOM 2 stores user settings. Anarchy Radio FM writes MMS overrides here."
+            "Where XCOM 2 stores user settings, shared with the in-game MCM menu."
         ))
-        self.config_field = self._path_row(root, "Browse...", self._browse_config)
-        root.addSpacing(14)
+        self.config_field = self._path_row(form, "Browse...", self._browse_config)
+        form.addSpacing(14)
+
+        # --- 5. Addon Testing Folder ---
+        form.addWidget(self._section_label(
+            "Step 5 — Addon Testing Folder  (optional)",
+            "Only if you're building a music pack. Drop an in-progress pack "
+            "here and it plays in-game as though you'd subscribed to it."
+        ))
+        self.addon_test_field = self._path_row(form, "Browse...",
+                                               self._browse_addon_test)
+        form.addSpacing(14)
 
         # --- 5. Radio Mode chunk length ---
-        root.addWidget(self._section_label(
-            "Step 5 — Radio Mode station length",
+        form.addWidget(self._section_label(
+            "Step 6 — Radio Mode station length",
             "How long a stretch Radio Mode plays before re-tuning."
         ))
         chunk_row = QHBoxLayout()
@@ -129,20 +162,28 @@ class SetupWindow(QWidget):
         why_btn.clicked.connect(self._explain_radio_length)
         chunk_row.addWidget(why_btn)
         chunk_row.addStretch()
-        root.addLayout(chunk_row)
-        root.addSpacing(12)
+        form.addLayout(chunk_row)
+        form.addSpacing(12)
 
-        # --- In-game music warning ---
+        # --- Launch option warning ---
+        # This replaced "turn XCOM's Music volume down to 0", which was the
+        # workaround for the game's soundtrack playing underneath everything.
+        # That's fixed properly now, and muting the game also silences MMS and
+        # any music packs — so the old advice actively costs people music.
         music_warn = QLabel(
-            "One last thing: turn XCOM's own Music volume down to 0 "
-            "(Options → Audio, in game). MMS silences most of it, but the gaps "
-            "are where you'll hear two soundtracks at once."
+            "One last thing, and it isn't optional: add  -forcelogflush  to "
+            "XCOM 2's launch options. In Steam, right-click XCOM 2 → "
+            "Properties → Launch Options. Using a mod launcher? Put it in that "
+            "launcher's arguments field. Without it, music plays over your "
+            "cinematics."
         )
         music_warn.setWordWrap(True)
         music_warn.setFont(QFont(FONT_FAMILY, 10))
         music_warn.setStyleSheet(f"color: {AMBER};")
-        root.addWidget(music_warn)
-        root.addSpacing(12)
+        form.addWidget(music_warn)
+        form.addSpacing(12)
+        # Keeps the steps packed at the top of the scroll body.
+        form.addStretch()
 
         root.addWidget(self._divider())
         root.addSpacing(16)
@@ -160,8 +201,6 @@ class SetupWindow(QWidget):
         btn_row.addStretch()
         root.addLayout(btn_row)
 
-        root.addStretch()
-
         # --- Status bar ---
         self.status = QLabel("")
         self.status.setStyleSheet(f"color: {AMBER}; font-size: 11px;")
@@ -174,6 +213,17 @@ class SetupWindow(QWidget):
             self.music_field.setText(existing_cfg.get("music_folder", ""))
             self.workshop_field.setText(existing_cfg.get("workshop_folder", ""))
             self.config_field.setText(existing_cfg.get("game_config_folder", ""))
+            self.addon_test_field.setText(existing_cfg.get("addon_test_folder", ""))
+
+        # Both of these live next to the app by default, so a first run has
+        # nothing to think about: accept the defaults and everything lands in
+        # one portable folder. Only pre-filled when empty, so an existing
+        # config's choices are never overwritten.
+        if not self.music_field.text().strip():
+            self.music_field.setText(os.path.normpath(default_music_folder()))
+        if not self.addon_test_field.text().strip():
+            self.addon_test_field.setText(
+                os.path.normpath(default_addon_test_folder()))
 
         # Auto-detect the workshop folder if not pre-filled. It's required
         # now, so filling it in beats making the user go hunting for it.
@@ -268,6 +318,11 @@ class SetupWindow(QWidget):
         if path:
             field.setText(os.path.normpath(path))
 
+    def _browse_addon_test(self, field):
+        path = QFileDialog.getExistingDirectory(self, "Select Addon Testing Folder")
+        if path:
+            field.setText(os.path.normpath(path))
+
     def _browse_config(self, field):
         path = QFileDialog.getExistingDirectory(self, "Select Game Config Folder")
         if path:
@@ -289,6 +344,7 @@ class SetupWindow(QWidget):
         music_folder = self.music_field.text().strip()
         workshop_folder = self.workshop_field.text().strip()
         game_config_folder = self.config_field.text().strip()
+        addon_test_folder = self.addon_test_field.text().strip()
 
         # Validate required fields
         if not game_exe:
@@ -311,6 +367,11 @@ class SetupWindow(QWidget):
 
         # Create state subfolders
         _create_state_folders(music_folder)
+
+        # Optional, so an empty box just means "not a pack author" — but if a
+        # path is set, make it real and drop the explainer in it.
+        if addon_test_folder:
+            create_addon_test_folder(addon_test_folder)
 
         # Validate workshop. Required: it's how we reach the installed mod's
         # own Config folder, which is the only place MMS reads our silencing
@@ -358,6 +419,7 @@ class SetupWindow(QWidget):
             "log_path": log_path,
             "game_config_folder": game_config_folder,
             "workshop_folder": workshop_folder,
+            "addon_test_folder": addon_test_folder,
             "auto_close_with_game": True,
             "default_volume": 0.8,
             "shuffle": True,

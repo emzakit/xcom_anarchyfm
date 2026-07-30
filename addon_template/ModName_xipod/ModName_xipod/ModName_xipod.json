@@ -1,9 +1,0 @@
-{
-    "name": "Name of mod",
-    "author": "Your name",
-    "description": "Insert mod description here",
-    "genres": ["separate", "genres", "with", "commas"],
-    "folders": {
-        "STATE_RESISTANCE_RADIO": "music/folder"
-    }
-}

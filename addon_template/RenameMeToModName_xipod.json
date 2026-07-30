@@ -1,0 +1,23 @@
+{
+    "name": "Name of Anarchy FM addon",
+    "author": "Your name",
+    "description": "what kind of addon is it",
+    "genres": ["separate", "genres", "with", "commas"],
+    "folders": {
+        "STATE_SHELL_MENU": "Content/",
+        "STATE_AVENGER": "Content/",
+        "STATE_GEOSCAPE": "Content/",
+        "STATE_SQUADSELECT": "Content/",
+        "STATE_MISSION_EXPLORE": "Content/",
+        "STATE_MISSION_COMBAT": "Content/",
+        "STATE_AVENGER_LOOP": "Content/",
+        "STATE_GEOSCAPE_LOOP": "Content/",
+        "STATE_MISSION_COMBAT_LOOP": "Content/",
+        "STATE_MISSION_EXPLORE_LOOP": "Content/",
+        "STATE_SHELL_MENU_LOOP": "Content/",
+        "STATE_SQUADSELECT_LOOP": "Content/",
+        "STATE_VICTORY": "Content/",
+        "STATE_DEFEAT": "Content/",
+        "STATE_RESISTANCE_RADIO": "Content/"
+    }
+}
