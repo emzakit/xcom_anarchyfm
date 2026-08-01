@@ -18,7 +18,10 @@ import mms_config
 import process_utils
 import settings as settings_mod
 from settings import EngineSettings
-from library import MusicLibrary
+from library import (
+    MusicLibrary, interleave_pools,
+    RADIO_SOURCE_RADIO, RADIO_SOURCE_STATE, RADIO_SOURCE_BOTH,
+)
 from setup import STATE_FOLDERS
 import addons
 
@@ -76,6 +79,38 @@ class TestSettingsRoundTrip(unittest.TestCase):
         self.assertEqual(s1.random_start, s2.random_start)
         self.assertEqual(s1.presets, s2.presets)
         self.assertEqual(s1.fx_params, s2.fx_params)
+
+
+class TestLoopResolution(unittest.TestCase):
+    """Battle's Loop Track box is a master over both mission phases. It used
+    to write bLoopBattle to the ini and show up in MCM while nothing read it —
+    no state maps to the "battle" LOOP key."""
+
+    def setUp(self):
+        self.s = EngineSettings()
+        for key in ("battle", "explore", "combat"):
+            self.s.loop[key] = False
+
+    def test_battle_loops_both_phases(self):
+        self.s.loop["battle"] = True
+        self.assertTrue(self.s.is_loop_enabled("state_mission_explore"))
+        self.assertTrue(self.s.is_loop_enabled("state_mission_combat"))
+
+    def test_phase_toggles_stay_independent(self):
+        self.s.loop["explore"] = True
+        self.assertTrue(self.s.is_loop_enabled("state_mission_explore"))
+        self.assertFalse(self.s.is_loop_enabled("state_mission_combat"))
+
+    def test_nothing_set_means_no_loop(self):
+        self.assertFalse(self.s.is_loop_enabled("state_mission_explore"))
+        self.assertFalse(self.s.is_loop_enabled("state_mission_combat"))
+
+    def test_states_without_a_master_are_unaffected(self):
+        self.s.loop["battle"] = True
+        self.s.loop["avenger"] = False
+        self.assertFalse(self.s.is_loop_enabled("state_avenger"))
+        # Stingers have no loop key at all
+        self.assertFalse(self.s.is_loop_enabled("state_victory"))
 
 
 class TestMMSConfig(unittest.TestCase):
@@ -378,6 +413,120 @@ class TestLibrary(unittest.TestCase):
             # radio pulls from the shared folder
             radio = lib.resolve_playlist("state_avenger", use_radio=True)
             self.assertEqual([t["name"] for t in radio], ["radio.mp3"])
+
+    def test_empty_base_folder_falls_back_to_the_loop_sibling(self):
+        """Tracks dropped only into STATE_MISSION_COMBAT_LOOP used to resolve
+        to nothing whenever the Combat Loop toggle was off — and since the
+        state still counted as covered, MMS was silenced and combat went
+        completely quiet."""
+        with tempfile.TemporaryDirectory() as tmp:
+            lib = self._make_library(tmp, {
+                "STATE_MISSION_COMBAT": [],
+                "STATE_MISSION_COMBAT_LOOP": ["c1.mp3", "c2.mp3"],
+            })
+            for use_loop in (False, True):
+                self.assertEqual(
+                    sorted(t["name"] for t in lib.resolve_playlist(
+                        "state_mission_combat", use_loop=use_loop)),
+                    ["c1.mp3", "c2.mp3"], f"use_loop={use_loop}")
+
+    def test_loop_toggle_still_picks_the_folder_when_both_are_filled(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            lib = self._make_library(tmp, {
+                "STATE_MISSION_COMBAT": ["base.mp3"],
+                "STATE_MISSION_COMBAT_LOOP": ["loop.mp3"],
+            })
+            names = lambda use_loop: [
+                t["name"] for t in lib.resolve_playlist(
+                    "state_mission_combat", use_loop=use_loop)]
+            self.assertEqual(names(True), ["loop.mp3"])
+            self.assertEqual(names(False), ["base.mp3"])
+
+    def test_radio_sources_resolve_to_the_right_folders(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            lib = self._make_library(tmp, {
+                "STATE_AVENGER": ["a.mp3"],
+                "STATE_RESISTANCE_RADIO": ["r1.mp3", "r2.mp3"],
+            })
+            names = lambda src: sorted(
+                t["name"] for t in lib.resolve_radio_playlist("state_avenger", src))
+
+            self.assertEqual(names(RADIO_SOURCE_RADIO), ["r1.mp3", "r2.mp3"])
+            self.assertEqual(names(RADIO_SOURCE_STATE), ["a.mp3"])
+            self.assertEqual(names(RADIO_SOURCE_BOTH), ["a.mp3", "r1.mp3", "r2.mp3"])
+            # Only "both" has two folders to choose between.
+            self.assertEqual(
+                [len(lib.resolve_radio_pools("state_avenger", s))
+                 for s in (RADIO_SOURCE_RADIO, RADIO_SOURCE_STATE, RADIO_SOURCE_BOTH)],
+                [1, 1, 2])
+
+    def test_empty_radio_folder_falls_back_to_the_state(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            lib = self._make_library(tmp, {
+                "STATE_AVENGER": ["a.mp3"],
+                "STATE_RESISTANCE_RADIO": [],
+            })
+            for src in (RADIO_SOURCE_RADIO, RADIO_SOURCE_BOTH):
+                self.assertEqual(
+                    [t["name"] for t in lib.resolve_radio_playlist("state_avenger", src)],
+                    ["a.mp3"], src)
+                # Nothing to alternate with — one pool, so no mix is attempted.
+                self.assertEqual(len(lib.resolve_radio_pools("state_avenger", src)), 1)
+
+    def test_mix_splits_airtime_evenly_between_uneven_folders(self):
+        """The bug this replaced: pooling both folders and shuffling gave each
+        a share proportional to its size, so twelve podcast files against two
+        Avenger tracks played six podcasts per song."""
+        radio = [{"name": f"r{i}", "path": f"r{i}"} for i in range(12)]
+        own = [{"name": f"a{i}", "path": f"a{i}"} for i in range(2)]
+        side = {t["path"]: ("radio" if t in radio else "own")
+                for t in radio + own}
+
+        counts, runs = {"radio": 0, "own": 0}, []
+        for _ in range(200):
+            seq = [side[t["path"]] for t in interleave_pools([radio, own])]
+            self.assertTrue(seq)
+            for s in seq:
+                counts[s] += 1
+            run = 1
+            for prev, cur in zip(seq, seq[1:]):
+                if cur == prev:
+                    run += 1
+                else:
+                    runs.append(run)
+                    run = 1
+            runs.append(run)
+
+        total = counts["radio"] + counts["own"]
+        self.assertAlmostEqual(counts["radio"] / total, 0.5, delta=0.05)
+        # Streak penalty: same-folder runs stay short.
+        self.assertLess(sum(r for r in runs if r >= 4) / len(runs), 0.02)
+        self.assertLessEqual(max(runs), 6)
+
+    def test_mix_rotates_a_folder_rather_than_picking_at_random(self):
+        radio = [{"name": f"r{i}", "path": f"r{i}"} for i in range(12)]
+        own = [{"name": "a0", "path": "a0"}]
+
+        for _ in range(50):
+            drawn = [t["path"] for t in interleave_pools([radio, own])
+                     if t["path"] != "a0"]
+            # A pool is served in shuffled rotation, so a track can't come
+            # back around until the rest of the folder has had its turn.
+            first_pass = drawn[:len(radio)]
+            self.assertEqual(len(set(first_pass)), len(first_pass))
+
+        # Nothing is starved either — how far into a pass a weave gets varies,
+        # but each one reshuffles from scratch.
+        heard = set()
+        for _ in range(10):
+            heard.update(t["path"] for t in interleave_pools([radio, own]))
+        self.assertEqual(len(heard), len(radio) + len(own))
+
+    def test_interleave_handles_empty_and_single_pools(self):
+        self.assertEqual(interleave_pools([]), [])
+        self.assertEqual(interleave_pools([[], []]), [])
+        solo = [{"name": "a", "path": "a"}, {"name": "b", "path": "b"}]
+        self.assertCountEqual(interleave_pools([solo, []]), solo)
 
     def test_export_ini_preserves_unknown_keys_and_owns_presets(self):
         try:
@@ -1135,12 +1284,13 @@ class TestSpotifyController(unittest.TestCase):
 class _FakeSpotify:
     """Records control calls; never hits the network."""
 
-    def __init__(self, playlists):
+    def __init__(self, playlists, active=True):
         self._playlists = playlists
         self.calls = []
+        self.active = active
 
     def is_active(self):
-        return True
+        return self.active
 
     def playlist_for(self, state):
         return self._playlists.get(state, "")
@@ -1222,6 +1372,51 @@ class TestEngineSpotifyOverride(unittest.TestCase):
         self.assertIn("prev", kinds)
         self.assertIn("pause", kinds)
         self.assertIn("resume", kinds)
+
+    def test_toggled_off_state_is_not_handed_to_spotify(self):
+        """A toggled-off screen belongs to the game's own music. Spotify used
+        to ignore the toggle and play on top of MMS and the stock score."""
+        e = self._engine()
+        fake = _FakeSpotify({"state_shell_menu": "spotify:playlist:SH"})
+        e.spotify = fake
+        e.settings.toggles["shell_menu"] = False
+
+        e.switch_state("state_shell_menu")
+        self.assertEqual(fake.calls, [])
+        self.assertFalse(e.is_spotify_active())
+        # Silence, so the game's music comes through as it does without Spotify
+        self.assertTrue(e._silent_override)
+
+    def test_spotify_stands_down_when_entering_a_toggled_off_state(self):
+        e = self._engine()
+        fake = _FakeSpotify({"state_avenger": "spotify:playlist:AV",
+                             "state_shell_menu": "spotify:playlist:SH"})
+        e.spotify = fake
+        e.settings.toggles["avenger"] = True
+        e.settings.toggles["shell_menu"] = False
+
+        e.switch_state("state_avenger")
+        e.switch_state("state_shell_menu")
+        self.assertIn(("pause", None), fake.calls)
+        self.assertNotIn(("play", "spotify:playlist:SH"), fake.calls)
+        self.assertTrue(e._silent_override)
+
+    def test_spotify_state_counts_as_covered_for_silencing(self):
+        """MMS silencing used to look only at local folders, so a Spotify-only
+        state kept the game's music underneath the playlist."""
+        e = self._engine()
+        e.spotify = _FakeSpotify({"state_mission_combat": "spotify:playlist:CB"})
+        for key in ("battle", "geoscape"):
+            e.settings.toggles[key] = True
+        e.library.library = {}          # no local tracks anywhere
+
+        covered = e._toggle_keys_with_tracks()
+        self.assertTrue(covered["battle"])      # Spotify covers it
+        self.assertFalse(covered["geoscape"])   # nothing does — leave it to MMS
+
+        # With the feature off, Spotify covers nothing.
+        e.spotify.active = False
+        self.assertFalse(e._toggle_keys_with_tracks()["battle"])
 
 
 if __name__ == "__main__":

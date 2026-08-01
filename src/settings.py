@@ -33,6 +33,19 @@ def _get_loop_key(top_state):
     return loop_mapping.get(top_state)
 
 
+# A loop key that a broader toggle also switches on. Battle covers the whole
+# tactical mission, so its Loop Track box loops explore AND combat, while the
+# sub-toggles stay available for looping only one phase.
+#
+# Without this, bLoopBattle was written to the ini and shown in MCM but read
+# by nothing at all: no state maps to the "battle" LOOP key, so the checkbox
+# was inert.
+_LOOP_MASTERS = {
+    "explore": "battle",
+    "combat": "battle",
+}
+
+
 # ------------------------------------------------------------------ #
 #  FX Presets — XCOM-themed effect combinations
 #
@@ -236,6 +249,21 @@ class EngineSettings:
 
     def get_loop_key(self, top_state):
         return _get_loop_key(top_state)
+
+    def is_loop_enabled(self, top_state):
+        """Whether this state should repeat its track.
+
+        True if the state's own loop toggle is on, or if a master covering it
+        is — see _LOOP_MASTERS. Either one alone is enough, so Battle loops the
+        whole mission while Explore/Combat loop just their own phase.
+        """
+        loop_key = _get_loop_key(top_state)
+        if loop_key is None:
+            return False
+        if self.loop.get(loop_key, False):
+            return True
+        master = _LOOP_MASTERS.get(loop_key)
+        return bool(master and self.loop.get(master, False))
 
     def effective_volume(self, top_state, master_volume):
         key = _get_toggle_key(top_state)

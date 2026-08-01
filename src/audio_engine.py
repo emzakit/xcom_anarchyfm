@@ -10,7 +10,7 @@ from pydub import AudioSegment
 # in library.py alongside the other state-folder lists — single source of truth.
 from library import (
     MusicLibrary, STINGER_STATES, BASE_STATES,
-    RADIO_MODE_STATE, RADIO_SOURCE_RADIO,
+    RADIO_MODE_STATE, RADIO_SOURCE_RADIO, interleave_pools,
 )
 from settings import EngineSettings
 from playback import PlaybackController
@@ -42,6 +42,13 @@ class XiPodEngine:
         # Active playlist + index
         self.active_playlist = []
         self.active_index = 0
+
+        # The separate folders the active playlist was woven from, when Radio
+        # Mode is drawing from more than one. Held so the playlist can be
+        # rewoven each time it runs out — a straight reshuffle of the finished
+        # list would keep the balance but replay the same 24 tracks forever.
+        # Empty whenever there's only one source, which is every other state.
+        self._mix_pools = []
 
         # Master playback config
         self.volume = 1.0
@@ -146,18 +153,31 @@ class XiPodEngine:
         else:
             console.warn("No game_config_folder set — MMS config sync skipped.")
 
+    def _state_enabled(self, state):
+        """False when the state's toggle is off — the game's music owns it."""
+        key = self.settings.get_toggle_key(state)
+        return not key or self.settings.toggles.get(key, True)
+
     def _toggle_keys_with_tracks(self):
-        """Which toggle keys currently resolve to playable audio.
+        """Which toggle keys we can actually cover, and so are safe to silence.
 
         Resolution goes through the library the same way switch_state would
         ask for it — loop folders, radio sources and all — so the answer
         matches what would really play rather than what the folder layout
         hints at. A state that comes back empty is left to MMS.
+
+        A Spotify-scored state counts as covered even with an empty folder:
+        Spotify is what plays there, and leaving it unsilenced put the stock
+        soundtrack underneath the playlist rather than replacing it.
         """
         found = {}
         for state in list(BASE_STATES) + list(STINGER_STATES):
             key = self.settings.get_toggle_key(state)
             if not key or found.get(key):
+                continue
+            if (self.spotify and self.spotify.is_active()
+                    and self.spotify.playlist_for(state)):
+                found[key] = True
                 continue
             if self.radio_override and state == RADIO_MODE_STATE:
                 playlist = self.library.resolve_radio_playlist(state, self.radio_source)
@@ -347,6 +367,7 @@ class XiPodEngine:
         self._silent_override = True
         self.active_playlist = []
         self.active_index = 0
+        self._mix_pools = []
         # This path returns before the radio resolution below, so clear the
         # flag explicitly — otherwise it stays stale from whatever state we
         # came from, and a later resume would apply a random start that this
@@ -369,21 +390,27 @@ class XiPodEngine:
         # the state to Spotify and stand the local engine down. Only taken
         # when the feature is on; otherwise the path below is unchanged.
         if self.spotify and self.spotify.is_active():
-            uri = self.spotify.playlist_for(top)
+            # A toggled-off state belongs to the game's own music, and that
+            # applies to Spotify too. Spotify used to skip this check
+            # entirely, so a screen we had deliberately left unsilenced got
+            # the stock soundtrack, MMS and Spotify all at once.
+            uri = self.spotify.playlist_for(top) if self._state_enabled(top) else ""
             if uri:
                 if top != self.current_top or not self._spotify_active:
                     self.pause()
                     self.playback.current_segment = None
                     self.active_playlist = []   # local engine stands down
                     self.active_index = 0
+                    self._mix_pools = []
                     self.current_top = top
                     self._spotify_active = True
                     self._spotify_paused = False
                     console.shen(f"Spotify has {top} — handing off the airwaves.")
                     self.spotify.play_context_async(uri)
                 return
-            # Leaving a Spotify-scored state for one without a playlist:
-            # stop Spotify and fall through to normal local playback.
+            # Leaving a Spotify-scored state for one without a playlist (or
+            # for one that's toggled off): stop Spotify and fall through to
+            # normal local playback.
             if self._spotify_active:
                 self._spotify_active = False
                 self.spotify.pause_async()
@@ -409,8 +436,7 @@ class XiPodEngine:
             return
 
         # Check toggle — if disabled, play silence instead of real music.
-        toggle_key = self.settings.get_toggle_key(top)
-        if toggle_key and not self.settings.toggles.get(toggle_key, True):
+        if not self._state_enabled(top):
             self._play_silent_override(top)
             return
 
@@ -429,9 +455,18 @@ class XiPodEngine:
             # repeat while radio is live — a station that replays one track
             # forever isn't a station.
             use_loop = False
-            playlist = self.library.resolve_radio_playlist(top, self.radio_source)
+            pools = self.library.resolve_radio_pools(top, self.radio_source)
+            # Only a genuine multi-folder source is a mix. One pool (or none)
+            # goes down the ordinary shuffle path.
+            self._mix_pools = pools if len(pools) > 1 else []
+            playlist = [t for pool in pools for t in pool]
+            if self._mix_pools:
+                console.debug("Radio mix: "
+                              + " + ".join(str(len(p)) for p in pools)
+                              + " tracks, alternating sources")
         else:
             radio_mode = self.settings.is_radio_mode(top)
+            self._mix_pools = []
             playlist = self.library.resolve_playlist(
                 top, use_loop=use_loop, use_radio=radio_mode)
 
@@ -446,6 +481,7 @@ class XiPodEngine:
             self.playback.current_segment = None
             self.active_playlist = []
             self.active_index = 0
+            self._mix_pools = []
             self.current_top = top
             return
 
@@ -480,10 +516,8 @@ class XiPodEngine:
         self.playback.playback_position = 0
         self.current_top = top
 
-        # Shuffle playlist
-        self.active_playlist = list(playlist)
-        if len(self.active_playlist) > 1:
-            random.shuffle(self.active_playlist)
+        # Shuffle playlist (or weave the sources together, in a radio mix)
+        self.active_playlist = self._build_playlist(playlist)
         self.active_index = 0
 
         # Bump generation — any older background loader will bail out
@@ -499,6 +533,20 @@ class XiPodEngine:
             daemon=True,
             name=f"Loader-{gen}"
         ).start()
+
+    def _build_playlist(self, playlist):
+        """Order a resolved playlist for playback.
+
+        A radio mix is woven from its source folders so the two keep trading
+        off (see library.interleave_pools); everything else is the plain
+        shuffle it has always been.
+        """
+        if len(self._mix_pools) > 1:
+            return interleave_pools(self._mix_pools)
+        out = list(playlist)
+        if len(out) > 1:
+            random.shuffle(out)
+        return out
 
     def _load_and_play(self, generation, outgoing_tail, top):
         """Background worker: loads the track, applies FX, starts playback.
@@ -692,10 +740,7 @@ class XiPodEngine:
 
     def _should_loop_for_state(self, state):
         """Check if a given state has looping enabled."""
-        loop_key = self.settings.get_loop_key(state)
-        if loop_key is None:
-            return False
-        return self.settings.loop.get(loop_key, False)
+        return self.settings.is_loop_enabled(state)
 
     def _advance_track(self):
         """Called (on a fresh thread) when a track finishes naturally.
@@ -741,7 +786,13 @@ class XiPodEngine:
             next_idx = self.active_index + 1
             if next_idx >= len(self.active_playlist):
                 next_idx = 0
-                if self.shuffle and len(self.active_playlist) > 1:
+                if len(self._mix_pools) > 1:
+                    # Reweave rather than reshuffle, and regardless of the
+                    # shuffle setting: the weave IS the mix, and reshuffling a
+                    # finished one just replays the same sequence for the rest
+                    # of the session.
+                    self.active_playlist = interleave_pools(self._mix_pools)
+                elif self.shuffle and len(self.active_playlist) > 1:
                     random.shuffle(self.active_playlist)
 
             self.active_index = next_idx
@@ -899,16 +950,21 @@ class XiPodEngine:
     def set_loop(self, state_key, enabled):
         key = state_key.lower()
         old_value = self.settings.loop.get(key)
+        # Compared rather than key-matched: the Battle box loops explore and
+        # combat without sharing their loop key, so "did this change what the
+        # live state does?" is the only question that gives the right answer
+        # for both the master and the sub-toggles.
+        was_looping = (self.settings.is_loop_enabled(self.current_top)
+                       if self.current_top else None)
         self.settings.set_loop(state_key, enabled)
         if old_value == enabled:
             return
         self._persist_settings()
-        if self.current_top:
-            active_loop_key = self.settings.get_loop_key(self.current_top)
-            if active_loop_key == key:
-                saved_top = self.current_top
-                self.current_top = None
-                self.switch_state(saved_top)
+        if (self.current_top
+                and self.settings.is_loop_enabled(self.current_top) != was_looping):
+            saved_top = self.current_top
+            self.current_top = None
+            self.switch_state(saved_top)
 
     def set_random_start(self, state_key, enabled):
         self.settings.set_random_start(state_key, enabled)

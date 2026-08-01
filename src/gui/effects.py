@@ -70,6 +70,21 @@ STATE_DISPLAY = {
     "squadselect": ("Squad Select", "Pre-mission squad loadout music"),
 }
 
+LOOP_TOOLTIP_DEFAULT = (
+    "Repeat the current track instead of advancing to the next.\n"
+    "Uses the _LOOP folder variant if it has tracks."
+)
+
+# Battle's box is a master over both mission phases, so it says so. Getting
+# this wrong costs the player a whole mission of the same track on repeat.
+LOOP_TOOLTIPS = {
+    "battle": (
+        "Loops the WHOLE mission — both explore and combat tracks.\n"
+        "For looping only one phase, use the Explore / Combat boxes below.\n"
+        "Uses the _LOOP folder variant if it has tracks."
+    ),
+}
+
 
 # ------------------------------------------------------------------ #
 #  Dialog
@@ -177,8 +192,7 @@ class EffectsDialog(QWidget):
             # Loop
             loop_cb = QCheckBox("Loop Track")
             loop_cb.setToolTip(
-                "Repeat the current track instead of advancing to the next.\n"
-                "Uses the _LOOP folder variant if it has tracks."
+                LOOP_TOOLTIPS.get(state_key, LOOP_TOOLTIP_DEFAULT)
             )
             if settings:
                 loop_cb.setChecked(settings.loop.get(state_key, False))
@@ -198,34 +212,49 @@ class EffectsDialog(QWidget):
 
             layout.addWidget(group)
 
-        # Separate explore/combat loop + random start
-        battle_extra = QGroupBox("Battle: Explore / Combat (separate loop + random start)")
-        battle_extra.setToolTip(
-            "Explore and Combat sub-states can have independent\n"
-            "loop and random start settings."
-        )
-        be_lay = QGridLayout(battle_extra)
+            # The two mission phases sit directly under Battle, where they
+            # read as a refinement of its Loop Track box rather than an
+            # unrelated group stranded at the bottom of the list.
+            if state_key == "battle":
+                layout.addWidget(self._build_battle_phases(settings))
 
-        for sub_key, sub_label in [("explore", "Explore"), ("combat", "Combat")]:
-            row = 0 if sub_key == "explore" else 1
-            loop_cb = QCheckBox(f"{sub_label} Loop")
-            loop_cb.setToolTip(f"Loop the current track during {sub_label} phase.")
-            if settings:
-                loop_cb.setChecked(settings.loop.get(sub_key, False))
-            loop_cb.toggled.connect(lambda val, k=sub_key: self._on_loop(k, val))
-            be_lay.addWidget(loop_cb, row, 0)
-
-            rand_cb = QCheckBox(f"{sub_label} Random Start")
-            rand_cb.setToolTip(f"Random start position during {sub_label} phase.")
-            if settings:
-                rand_cb.setChecked(settings.random_start.get(sub_key, False))
-            rand_cb.toggled.connect(lambda val, k=sub_key: self._on_random_start(k, val))
-            be_lay.addWidget(rand_cb, row, 1)
-
-        layout.addWidget(battle_extra)
         layout.addStretch()
         scroll.setWidget(container)
         return scroll
+
+    def _build_battle_phases(self, settings):
+        """Explore/Combat sub-toggles — narrower than Battle's own Loop Track."""
+        group = QGroupBox("Battle phases — loop just one phase")
+        group.setToolTip(
+            "Battle's Loop Track box loops the whole mission.\n"
+            "These narrow it to a single phase, and give each phase its own\n"
+            "random start setting."
+        )
+        g_lay = QGridLayout(group)
+
+        phases = [
+            ("explore", "Explore", "explore (out of contact)"),
+            ("combat",  "Combat",  "combat (enemies engaged)"),
+        ]
+        for row, (sub_key, sub_label, phase_desc) in enumerate(phases):
+            loop_cb = QCheckBox(f"{sub_label} Loop")
+            loop_cb.setToolTip(
+                f"Loops ONLY {phase_desc} tracks.\n"
+                f"Battle's Loop Track box loops both phases instead."
+            )
+            if settings:
+                loop_cb.setChecked(settings.loop.get(sub_key, False))
+            loop_cb.toggled.connect(lambda val, k=sub_key: self._on_loop(k, val))
+            g_lay.addWidget(loop_cb, row, 0)
+
+            rand_cb = QCheckBox(f"{sub_label} Random Start")
+            rand_cb.setToolTip(f"Random start position during {phase_desc}.")
+            if settings:
+                rand_cb.setChecked(settings.random_start.get(sub_key, False))
+            rand_cb.toggled.connect(lambda val, k=sub_key: self._on_random_start(k, val))
+            g_lay.addWidget(rand_cb, row, 1)
+
+        return group
 
     # ------------------------------------------------------------ #
     #  Global FX Sliders Tab

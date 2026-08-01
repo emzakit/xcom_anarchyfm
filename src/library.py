@@ -2,6 +2,7 @@
 
 import json
 import os
+import random
 import console
 
 # Path to xipod_defaults.json (lives in project root next to xipod_config.json)
@@ -55,6 +56,68 @@ STATE_FOLDERS_FOR_MODS = tuple(
 
 # Everything the scanner recognises as a valid folder
 ALL_KNOWN = set(BASE_STATES) | LOOP_STATES | set(STINGER_STATES) | {RADIO_STATE}
+
+
+# How much a source's chance is cut for every track it has just played back
+# to back. 1.0 is a plain coin flip, which still produces runs of five and six;
+# 0 is rigid alternation, which is its own kind of monotony. A quarter leaves
+# the occasional double — the shape a real station has — while a third in a row
+# is a one-in-sixteen event.
+MIX_STREAK_WEIGHT = 0.25
+
+
+def _pool_rotation(pool, rng):
+    """Yield a pool's tracks forever, reshuffling between passes.
+
+    A rotation rather than an independent random pick each time: within a pass
+    every track is heard once, so a forty-track station doesn't spend the
+    evening on the same three songs.
+    """
+    order = list(pool)
+    while True:
+        rng.shuffle(order)
+        for track in order:
+            yield track
+
+
+def interleave_pools(pools, rng=random):
+    """Weave several track pools into one playlist that keeps trading off.
+
+    Pooling the folders and shuffling the result gives each folder a share
+    proportional to its SIZE — twelve podcast episodes against two Avenger
+    tracks is six podcasts per song, which isn't a mix, it's the podcast folder
+    with interruptions. So the pool is chosen per track, each equally likely,
+    with a streak penalty (MIX_STREAK_WEIGHT) that makes a source less and less
+    likely the longer it has been hogging the air.
+
+    The result runs one full pass of the largest pool per source, so the
+    biggest folder is heard end to end while smaller ones repeat to keep up.
+    Callers rebuild it when it runs out — the rotations are local, so each
+    rebuild is a fresh draw rather than the same sequence again.
+    """
+    pools = [p for p in pools if p]
+    if not pools:
+        return []
+    if len(pools) == 1:
+        only = list(pools[0])
+        rng.shuffle(only)
+        return only
+
+    rotations = [_pool_rotation(p, rng) for p in pools]
+    indices = range(len(pools))
+    total = len(pools) * max(len(p) for p in pools)
+
+    out = []
+    last = None
+    streak = 0
+    for _ in range(total):
+        weights = [MIX_STREAK_WEIGHT ** streak if i == last else 1.0
+                   for i in indices]
+        pick = rng.choices(indices, weights=weights)[0]
+        streak = streak + 1 if pick == last else 1
+        last = pick
+        out.append(next(rotations[pick]))
+    return out
 
 
 def _scan_audio_files(folder, source=None):
@@ -189,6 +252,14 @@ class MusicLibrary:
         When use_loop is True, try the _LOOP folder first.
         If _LOOP folder is empty, fall back to the regular folder.
 
+        The fallback runs BOTH ways. A folder pair is one state's music split
+        by how the user wants it played, not two separate libraries, so an
+        empty base folder falls back to the _LOOP sibling as readily as the
+        reverse. Without that, dropping every combat track into
+        STATE_MISSION_COMBAT_LOOP and leaving the Combat Loop toggle off
+        resolved to nothing at all — and because the state still counted as
+        covered, MMS had been silenced and the result was dead air.
+
         Returns [] if no tracks found — the engine handles all
         cross-state fallback logic via settings.fallbacks.
         """
@@ -198,17 +269,40 @@ class MusicLibrary:
                 return radio_tracks
             # state_radio empty → fall through to regular folder
 
-        if use_loop:
-            loop_key = top + "_loop"
-            loop_tracks = self.library.get(loop_key, [])
-            if loop_tracks:
-                return loop_tracks
-            # _LOOP empty → fall through to regular folder
+        loop_tracks = self.library.get(top + "_loop", [])
+        own_tracks = self.library.get(top, [])
 
-        return self.library.get(top, [])
+        if use_loop:
+            return loop_tracks or own_tracks
+        return own_tracks or loop_tracks
+
+    def resolve_radio_pools(self, top, source):
+        """The separate track pools Radio Mode draws from — see
+        resolve_radio_playlist for what `source` means.
+
+        Kept apart rather than concatenated because "both" has to pick BETWEEN
+        the folders, and once they're one list there's no way to tell which
+        track came from where. Empty pools are dropped, so the caller can read
+        len(pools) > 1 as "there is genuinely a mix to make".
+        """
+        radio_tracks = self.library.get(RADIO_STATE, [])
+        own_tracks = self.library.get(top, [])
+
+        if source == RADIO_SOURCE_STATE:
+            pools = [own_tracks]
+        elif source == RADIO_SOURCE_BOTH:
+            pools = [radio_tracks, own_tracks]
+        else:
+            pools = [radio_tracks] if radio_tracks else [own_tracks]
+
+        return [p for p in pools if p]
 
     def resolve_radio_playlist(self, top, source):
-        """Track list for the Radio Mode button (Avenger only).
+        """Flat track list for the Radio Mode button (Avenger only).
+
+        This is every track Radio Mode could play, in no meaningful order —
+        callers that need the mix to alternate go through resolve_radio_pools
+        and interleave_pools instead.
 
         The state's _LOOP folder (STATE_AVENGER_LOOP) is deliberately NOT
         consulted here. Radio Mode overrides it: when the button is on, the
@@ -223,18 +317,10 @@ class MusicLibrary:
           "state" — the state's own folder only. No fallback: you asked for
                     this folder specifically, and an empty one means the
                     game's own music takes over, same as it would normally.
-          "both"  — both folders pooled. The engine shuffles the combined
-                    list, so a finished track can be followed by one from
-                    either folder.
+          "both"  — both folders, each given equal airtime regardless of how
+                    many files it holds. See interleave_pools.
         """
-        radio_tracks = self.library.get(RADIO_STATE, [])
-        own_tracks = self.library.get(top, [])
-
-        if source == RADIO_SOURCE_STATE:
-            return own_tracks
-        if source == RADIO_SOURCE_BOTH:
-            return radio_tracks + own_tracks
-        return radio_tracks or own_tracks
+        return [t for pool in self.resolve_radio_pools(top, source) for t in pool]
 
     def export_ini(self, log_path, settings_lines, prefer_existing=True):
         """Write XComXiPod.ini with settings + track manifest.
