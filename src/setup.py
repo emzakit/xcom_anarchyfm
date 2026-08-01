@@ -68,11 +68,35 @@ def default_music_folder():
     return data_path("music")
 
 
-def default_addon_test_folder():
+# Where ModBuddy drops a freshly built mod, relative to the steamapps root.
+_MODBUDDY_OUTPUT = os.path.join(
+    "common", "XCOM 2 SDK", "Binaries", "Win32", "ModBuddy", "Mods")
+
+
+def default_addon_test_folder(game_exe="", workshop_folder=""):
+    """Where to watch for music packs under test.
+
+    Prefers ModBuddy's own output folder when the SDK is installed: a pack
+    lands there the moment it builds, so testing it needs no copying at all —
+    build, hit Save & Rescan, listen. That's the whole loop.
+
+    Falls back to a folder beside the app for anyone without the SDK, who'll
+    be dropping in packs by hand anyway.
+    """
+    from mms_packs import steamapps_root
+
+    root = steamapps_root(workshop_folder) or steamapps_root(game_exe)
+    if root:
+        candidate = os.path.join(root, _MODBUDDY_OUTPUT)
+        if os.path.isdir(candidate):
+            return candidate
+
     return data_path("addon_test")
 
 
 def default_addon_projects_folder():
+    # Always beside the app, never derived from the test folder — the test
+    # folder may well be somewhere that isn't ours to put things in.
     return data_path("addon_projects")
 
 
@@ -80,12 +104,12 @@ _ADDON_TEST_README = """Addon testing folder
 ====================
 
 Drop an in-progress music pack in here — the whole mod folder, the one with
-the *_xipod.json descriptor in it — and Anarchy Radio FM will pick it up
-exactly as if you'd subscribed to it on the Workshop.
+the xipod_settings.json descriptor in it — and Anarchy Radio FM will pick it
+up exactly as if you'd subscribed to it on the Workshop.
 
     addon_test/
         MyMusicPack/
-            MyMusicPack_xipod.json
+            xipod_settings.json
             music/
                 STATE_AVENGER/
                     track.mp3
@@ -128,25 +152,26 @@ def _write_readme(folder, text):
 
 
 def create_addon_test_folder(path):
-    """Create the addon testing folder, and a projects folder beside it.
+    """Create the addon testing folder, and a projects folder for solutions.
 
-    They're a pair: one holds the ModBuddy solution, the other the built pack
-    the app plays from. Made together because someone setting up to author a
-    pack needs both, and putting the project inside the folder being scanned
-    is a good way to confuse yourself.
+    The README only goes in if we actually created the folder. The default
+    testing folder is now ModBuddy's output directory, which already exists
+    and already has a job — dropping our leaflet in someone else's filing
+    cabinet isn't on.
     """
     if not path:
         return
     try:
-        _write_readme(path, _ADDON_TEST_README)
+        existed = os.path.isdir(path)
+        os.makedirs(path, exist_ok=True)
+        if not existed:
+            _write_readme(path, _ADDON_TEST_README)
     except Exception as e:
         console.warn(f"Couldn't create the addon test folder: {e}")
         return
 
     try:
-        projects = os.path.join(os.path.dirname(os.path.abspath(path)),
-                                "addon_projects")
-        _write_readme(projects, _ADDON_PROJECTS_README)
+        _write_readme(default_addon_projects_folder(), _ADDON_PROJECTS_README)
     except Exception as e:
         console.debug(f"Couldn't create the addon projects folder: {e}")
 
@@ -177,11 +202,23 @@ def discover_addons(cfg):
     and merged at scan time — see addons.py for why.
     """
     import addons
-    return addons.scan(
-        cfg.get("workshop_folder", ""),
+
+    workshop = cfg.get("workshop_folder", "")
+    test_folder = cfg.get("addon_test_folder", "")
+
+    found = addons.scan(
+        workshop,
         addons.load_enabled_map(CONFIG_PATH),
-        test_folder=cfg.get("addon_test_folder", ""),
+        test_folder=test_folder,
     )
+
+    # Forget packs that have gone. Guarded on the folders actually being
+    # readable: an unplugged drive scans as zero addons, and pruning on that
+    # would silently reset every on/off choice the user had made.
+    if any(os.path.isdir(r) for r in (workshop, test_folder) if r):
+        addons.prune_enabled_map(CONFIG_PATH, {a.id for a in found})
+
+    return found
 
 
 # ------------------------------------------------------------------ #

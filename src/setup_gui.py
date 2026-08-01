@@ -134,8 +134,8 @@ class SetupWindow(QWidget):
         # --- 5. Addon Testing Folder ---
         form.addWidget(self._section_label(
             "Step 5 — Addon Testing Folder  (optional)",
-            "Only if you're building a music pack. Drop an in-progress pack "
-            "here and it plays in-game as though you'd subscribed to it."
+            "Only if you're building a music pack. Defaults to ModBuddy's "
+            "output folder, so a pack is playable the moment it builds."
         ))
         self.addon_test_field = self._path_row(form, "Browse...",
                                                self._browse_addon_test)
@@ -222,8 +222,12 @@ class SetupWindow(QWidget):
         if not self.music_field.text().strip():
             self.music_field.setText(os.path.normpath(default_music_folder()))
         if not self.addon_test_field.text().strip():
-            self.addon_test_field.setText(
-                os.path.normpath(default_addon_test_folder()))
+            # Prefers ModBuddy's output folder, so a built pack is testable
+            # without copying it anywhere.
+            self.addon_test_field.setText(os.path.normpath(
+                default_addon_test_folder(
+                    game_exe=self.exe_field.text().strip(),
+                    workshop_folder=self.workshop_field.text().strip())))
 
         # Auto-detect the workshop folder if not pre-filled. It's required
         # now, so filling it in beats making the user go hunting for it.

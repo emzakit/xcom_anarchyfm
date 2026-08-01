@@ -98,6 +98,7 @@ class XiPodEngine:
         self._game_config_folder = None
         self._workshop_folder = None
         self._mod_config_folders = []
+        self._game_exe = ""
 
         # Debounced settings write-back (see _persist_settings).
         self._persist_lock = threading.Lock()
@@ -109,13 +110,16 @@ class XiPodEngine:
 
     def load_library(self, root_folder, game_log_path, game_config_folder=None,
                      shuffle=True, addons=None, workshop_folder=None,
-                     mod_config_folders=None):
+                     mod_config_folders=None, game_exe=""):
         self._root_folder = root_folder
         self._game_log_path = game_log_path
         self._game_config_folder = game_config_folder
         # Used to spot other people's MMS packs, and to find our own installed
         # mod folder — which is the only place MMS reads our config from.
         self._workshop_folder = workshop_folder
+        # Only used to find the launcher's mod list, which is the
+        # authority on where the mod is actually loaded from.
+        self._game_exe = game_exe or ""
         # Escape hatch for installs the workshop folder can't describe, such
         # as a local ModBuddy build.
         if isinstance(mod_config_folders, str):
@@ -190,7 +194,8 @@ class XiPodEngine:
         # silencing does nothing at all, however correct the content is.
         try:
             mod_dirs = mms_packs.find_own_config_dirs(self._workshop_folder,
-                                                      self._mod_config_folders)
+                                                      self._mod_config_folders,
+                                                      game_exe=self._game_exe)
         except Exception as e:
             console.warn(f"Couldn't locate our mod's config folder: {e}")
             mod_dirs = []

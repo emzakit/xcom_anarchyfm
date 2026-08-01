@@ -380,6 +380,7 @@ class XiPodWindow(QWidget):
             addons=discover_addons(cfg),
             workshop_folder=cfg.get("workshop_folder", ""),
             mod_config_folders=cfg.get("mod_config_folder", ""),
+            game_exe=cfg.get("game_exe", ""),
         )
         self.engine.set_volume(default_vol)
         self.engine.set_crossfade(crossfade_ms)

@@ -21,6 +21,7 @@ exactly as it would without us — which is the whole point of running both.
 Reading, not writing: nothing here touches another mod's files.
 """
 
+import json
 import os
 import re
 
@@ -169,12 +170,86 @@ def _scan_mod_folder(root):
 _OWN_MOD_MARKER = "anarchyradiofm.xcommod"
 
 # Where a mod folder can live, relative to the steamapps root that the
-# workshop folder sits under. Mods installed by hand (and anything built
-# straight into the game) land in one of these rather than in the workshop.
+# workshop folder sits under. These are the paths the GAME itself reads when
+# launched directly — a mod installed by hand goes in one of them.
+#
+# A mod launcher can load from anywhere at all, so this list is the fallback,
+# not the answer. See _aml_mod_path.
 _LOCAL_MOD_DIRS = [
     os.path.join("common", "XCOM 2", "XComGame", "Mods"),
     os.path.join("common", "XCOM 2", "XCom2-WarOfTheChosen", "XComGame", "Mods"),
 ]
+
+# Our mod's id as it appears in a launcher's mod list.
+_OWN_MOD_ID = "anarchyradiofm"
+
+
+def _aml_mod_path(game_exe):
+    """Our mod's folder according to the Alternative Mod Launcher, or "".
+
+    AML keeps a settings.json beside its exe listing every mod it knows about,
+    each with the folder it will actually load and whether it's switched on.
+    When someone launches through AML that file is the authority — it can and
+    does point somewhere the game would never look on its own, such as the
+    SDK's ModBuddy output for anyone who builds the mod themselves.
+
+    Worth reading rather than guessing: writing the silencing settings into a
+    copy the launcher ignores leaves a correct-looking file on disk that does
+    absolutely nothing, which is a miserable thing to diagnose.
+    """
+    if not game_exe:
+        return ""
+
+    settings = os.path.join(os.path.dirname(os.path.abspath(game_exe)),
+                            "settings.json")
+    if not os.path.isfile(settings):
+        return ""      # not AML, or a layout we don't recognise
+
+    try:
+        with open(settings, "r", encoding="utf-8-sig") as f:
+            data = json.load(f)
+    except Exception as e:
+        console.debug(f"Couldn't read the launcher's settings.json: {e}")
+        return ""
+
+    try:
+        groups = (data.get("Mods") or {}).get("Entries") or {}
+        for group in groups.values():
+            for mod in (group.get("Entries") or []):
+                if str(mod.get("ID", "")).lower() != _OWN_MOD_ID:
+                    continue
+                # Deliberately ignores whether the launcher has the mod ticked
+                # on. Someone toggling mods around while testing shouldn't get
+                # nagged, and writing the settings into a folder that isn't
+                # loaded right now costs nothing — it's simply correct already
+                # when they switch it back on.
+                path = mod.get("Path") or ""
+                if path and os.path.isdir(path):
+                    return path
+                console.warn(f"Launcher points at a folder that isn't there: {path}")
+    except Exception as e:
+        console.debug(f"Couldn't parse the launcher's mod list: {e}")
+
+    return ""
+
+
+def steamapps_root(path):
+    """The steamapps folder `path` sits under, or "".
+
+    Works from the workshop folder, the game exe, anything inside a Steam
+    library — they all hang off the same root, so one configured path locates
+    the rest of the install.
+    """
+    if not path:
+        return ""
+    current = os.path.abspath(path)
+    while True:
+        parent = os.path.dirname(current)
+        if parent == current:
+            return ""
+        if os.path.basename(current).lower() == "steamapps":
+            return current
+        current = parent
 
 
 def _mod_containers(workshop_folder):
@@ -204,7 +279,7 @@ def _mod_containers(workshop_folder):
     return out
 
 
-def find_own_config_dirs(workshop_folder, extra=None):
+def find_own_config_dirs(workshop_folder, extra=None, game_exe=None):
     """Config folders of our own installed mod, where MMS actually reads.
 
     MMS loads its settings from each mod's own Config folder. The game does
@@ -232,6 +307,16 @@ def find_own_config_dirs(workshop_folder, extra=None):
             dirs.append(cfg)
         else:
             console.warn(f"mod_config_folder not found: {path}")
+
+    # If a launcher told us where it loads the mod from, that settles it —
+    # nothing found by searching can be more accurate than the thing doing
+    # the loading.
+    launcher_path = _aml_mod_path(game_exe)
+    if launcher_path:
+        cfg = os.path.join(launcher_path, "Config")
+        if os.path.isdir(cfg):
+            console.debug(f"Mod folder per the launcher: {launcher_path}")
+            dirs.append(cfg)
 
     for container in _mod_containers(workshop_folder):
         try:

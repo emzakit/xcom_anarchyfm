@@ -333,6 +333,12 @@ def sync_ini_files(toggles, config_folder=None, has_tracks=None, pack_defs=None,
         _write_if_changed(os.path.join(mod_dir, "XComTacticalSound.ini"), tact_content)
         written_to_mod += 1
 
+    if written_to_mod > 1:
+        # More than one copy of the mod is installed and we can't know which
+        # one the launcher will load, so they all get the same settings.
+        console.debug(f"MMS config written to {written_to_mod} installed copies "
+                      f"of the mod.")
+
     if not written_to_mod:
         # Loud, because the failure is otherwise invisible: the app plays its
         # music perfectly and the game plays straight over the top of it.

@@ -1,6 +1,6 @@
 """Music Addons panel — turn subscribed Workshop music packs on and off.
 
-Lists every `*_xipod.json` pack found in the workshop folder, with its author,
+Lists every `xipod_settings.json` pack found in the workshop folder, with its author,
 genre tags, description and how many tracks it actually contributed to the
 library. Toggling a pack and hitting Save rescans the library, so changes are
 audible without restarting.

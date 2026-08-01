@@ -73,7 +73,8 @@ def main_cli():
     engine.load_library(music_path, log_path, game_config_folder=game_config_folder,
                         shuffle=shuffle, addons=discover_addons(cfg),
                         workshop_folder=cfg.get("workshop_folder", ""),
-                        mod_config_folders=cfg.get("mod_config_folder", ""))
+                        mod_config_folders=cfg.get("mod_config_folder", ""),
+                        game_exe=cfg.get("game_exe", ""))
     engine.set_volume(default_vol)
     engine.set_crossfade(crossfade_ms)
     engine.set_radio_chunk_minutes(cfg.get("radio_chunk_minutes", 10))

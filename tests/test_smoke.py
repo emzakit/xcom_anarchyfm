@@ -249,6 +249,96 @@ class TestMMSPacks(unittest.TestCase):
             open(exe, "w").close()
             self.assertEqual(find_workshop_folder(exe), "")
 
+    def test_launcher_settings_win_over_guessing(self):
+        """A mod launcher can load the mod from anywhere — the SDK's build
+        output, say. Its own settings.json says where, and that beats
+        searching the usual places."""
+        import mms_packs
+        with tempfile.TemporaryDirectory() as tmp:
+            launcher_dir = os.path.join(tmp, "AML")
+            elsewhere = os.path.join(tmp, "some", "build", "output",
+                                     "AnarchyRadioFM")
+            os.makedirs(launcher_dir)
+            os.makedirs(os.path.join(elsewhere, "Config"))
+            exe = os.path.join(launcher_dir, "Launcher.exe")
+            open(exe, "w").close()
+            with open(os.path.join(launcher_dir, "settings.json"), "w",
+                      encoding="utf-8") as f:
+                json.dump({"Mods": {"Entries": {"Unsorted": {"Entries": [
+                    {"ID": "SomeOtherMod", "Path": "C:/nope", "isActive": True},
+                    {"ID": "AnarchyRadioFM", "Path": elsewhere, "isActive": True},
+                ]}}}}, f)
+
+            dirs = mms_packs.find_own_config_dirs("", game_exe=exe)
+            self.assertEqual(len(dirs), 1)
+            self.assertTrue(dirs[0].startswith(elsewhere))
+
+    def test_launcher_path_used_even_when_mod_toggled_off(self):
+        """Whether the launcher currently has the mod ticked is none of our
+        business — someone toggling mods around while testing shouldn't get
+        nagged, and settings written to a folder that isn't loaded right now
+        are simply correct already when they switch it back on."""
+        import mms_packs
+        with tempfile.TemporaryDirectory() as tmp:
+            launcher_dir = os.path.join(tmp, "AML")
+            modpath = os.path.join(tmp, "AnarchyRadioFM")
+            os.makedirs(launcher_dir)
+            os.makedirs(os.path.join(modpath, "Config"))
+            exe = os.path.join(launcher_dir, "Launcher.exe")
+            open(exe, "w").close()
+            with open(os.path.join(launcher_dir, "settings.json"), "w",
+                      encoding="utf-8") as f:
+                json.dump({"Mods": {"Entries": {"Unsorted": {"Entries": [
+                    {"ID": "AnarchyRadioFM", "Path": modpath, "isActive": False},
+                ]}}}}, f)
+
+            dirs = mms_packs.find_own_config_dirs("", game_exe=exe)
+            self.assertEqual(len(dirs), 1)
+            self.assertTrue(dirs[0].startswith(modpath))
+
+    def test_addon_test_folder_defaults_to_modbuddy_output(self):
+        """Building a pack should make it testable immediately — no copying."""
+        from setup import default_addon_test_folder
+        with tempfile.TemporaryDirectory() as tmp:
+            steamapps = os.path.join(tmp, "steamapps")
+            workshop = os.path.join(steamapps, "workshop", "content", "268500")
+            modbuddy = os.path.join(steamapps, "common", "XCOM 2 SDK",
+                                    "Binaries", "Win32", "ModBuddy", "Mods")
+            os.makedirs(workshop)
+            os.makedirs(modbuddy)
+
+            self.assertEqual(
+                os.path.normcase(default_addon_test_folder(workshop_folder=workshop)),
+                os.path.normcase(modbuddy))
+
+    def test_addon_test_folder_falls_back_without_the_sdk(self):
+        from setup import default_addon_test_folder, data_path
+        with tempfile.TemporaryDirectory() as tmp:
+            workshop = os.path.join(tmp, "steamapps", "workshop", "content", "268500")
+            os.makedirs(workshop)
+            self.assertEqual(default_addon_test_folder(workshop_folder=workshop),
+                             data_path("addon_test"))
+
+    def test_plain_game_exe_falls_back_to_searching(self):
+        """Launching the game directly means no settings.json — the usual
+        install locations are then the right answer."""
+        import mms_packs
+        with tempfile.TemporaryDirectory() as tmp:
+            steamapps = os.path.join(tmp, "steamapps")
+            workshop = os.path.join(steamapps, "workshop", "content", "268500")
+            local = os.path.join(steamapps, "common", "XCOM 2", "XComGame",
+                                 "Mods", "AnarchyRadioFM")
+            os.makedirs(workshop)
+            os.makedirs(os.path.join(local, "Config"))
+            with open(os.path.join(local, "AnarchyRadioFM.XComMod"), "w") as f:
+                f.write("[mod]\n")
+            exe = os.path.join(steamapps, "common", "XCOM 2", "XCom2.exe")
+            open(exe, "w").close()
+
+            dirs = mms_packs.find_own_config_dirs(workshop, game_exe=exe)
+            self.assertEqual(len(dirs), 1)
+            self.assertTrue(dirs[0].startswith(local))
+
     def test_active_mods_are_deduped_and_lowercased(self):
         import mms_packs
         with tempfile.TemporaryDirectory() as tmp:
@@ -494,6 +584,59 @@ class TestMusicAddons(unittest.TestCase):
             self._make_mod(workshop, "1", {"name": "P", "genres": "Rock, Funk"},
                            {"music": ["a.mp3"]})
             self.assertEqual(addons.scan(workshop)[0].genres, ["Funk", "Rock"])
+
+    def test_fixed_descriptor_name_and_legacy_suffix_both_work(self):
+        """The descriptor is a fixed filename now — no renaming to match your
+        mod. Packs published under the old `<Name>_xipod.json` scheme still
+        have to load; breaking someone's uploaded mod over a filename would
+        be indefensible."""
+        with tempfile.TemporaryDirectory() as tmp:
+            workshop = os.path.join(tmp, "workshop")
+            os.makedirs(workshop)
+
+            for mod_id, fname, label in (
+                ("111", addons.DESCRIPTOR_NAME, "New"),
+                ("222", "WhateverTheyCalledIt_xipod.json", "Legacy"),
+            ):
+                root = os.path.join(workshop, mod_id, "music")
+                os.makedirs(root)
+                with open(os.path.join(root, "a.mp3"), "wb") as f:
+                    f.write(b"\x00")
+                with open(os.path.join(workshop, mod_id, fname), "w",
+                          encoding="utf-8") as f:
+                    json.dump({"name": label,
+                               "folders": {"STATE_AVENGER": "music"}}, f)
+
+            found = {a.id: a.name for a in addons.scan(workshop)}
+            self.assertEqual(found, {"111": "New", "222": "Legacy"})
+
+    def test_uninstalled_addons_are_forgotten(self):
+        """The descriptor is the identity — no *_xipod.json, no pack. Its
+        remembered on/off setting goes with it rather than lingering."""
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg_path = os.path.join(tmp, "xipod_config.json")
+            with open(cfg_path, "w", encoding="utf-8") as f:
+                json.dump({"addons": {"still_here": False, "deleted": False}}, f)
+
+            addons.prune_enabled_map(cfg_path, {"still_here"})
+
+            with open(cfg_path, encoding="utf-8") as f:
+                left = json.load(f)["addons"]
+            self.assertEqual(left, {"still_here": False})
+
+    def test_prune_leaves_config_alone_when_nothing_changed(self):
+        """Must not rewrite the file on every startup for no reason."""
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg_path = os.path.join(tmp, "xipod_config.json")
+            with open(cfg_path, "w", encoding="utf-8") as f:
+                json.dump({"addons": {"a": True}, "other_setting": 42}, f)
+            before = os.path.getmtime(cfg_path)
+
+            addons.prune_enabled_map(cfg_path, {"a"})
+
+            self.assertEqual(os.path.getmtime(cfg_path), before)
+            with open(cfg_path, encoding="utf-8") as f:
+                self.assertEqual(json.load(f)["other_setting"], 42)
 
     def test_enabled_map_disables_and_library_drops_tracks(self):
         with tempfile.TemporaryDirectory() as tmp:

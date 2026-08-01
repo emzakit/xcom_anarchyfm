@@ -106,5 +106,5 @@ needs configuring beyond dropping files in.
 
 ---
 
-See [`../addon_template/MODDING_GUIDE.md`](../addon_template/MODDING_GUIDE.md) for building shareable music
+See [Making a music pack](https://github.com/emzakit/xcom_anarchyfm/wiki/Making-a-music-pack) for building shareable music
 packs you can put on the Steam Workshop.

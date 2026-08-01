@@ -4,7 +4,16 @@
 // Handles the AVENGER state and the squad-select-to-avenger
 // delayed transition (mission cancel vs launch race condition).
 // ============================================================
+// Matched with IsA rather than ScreenClass — see XiPod_UISL_PostMission for
+// the full reasoning. Long War of the Chosen puts several of its own
+// listeners on UIAvengerHUD and other packs replace it outright, so binding
+// to the exact class is a silent failure waiting to happen.
 class XiPod_UISL_Strategy extends UIScreenListener;
+
+simulated function bool IsAvengerHUD(UIScreen Screen)
+{
+    return Screen != none && Screen.IsA('UIAvengerHUD');
+}
 
 // Emission is deliberately UNCONDITIONAL (bar the squad-select race below).
 // There used to be an `else if (Current != "AVENGER")` guard here to avoid
@@ -17,6 +26,9 @@ class XiPod_UISL_Strategy extends UIScreenListener;
 event OnInit(UIScreen Screen)
 {
     local string Current;
+
+    if (!IsAvengerHUD(Screen))
+        return;
 
     Current = class'XiPod_Settings'.static.GetCurrentScreen();
 
@@ -36,6 +48,9 @@ event OnInit(UIScreen Screen)
 event OnReceiveFocus(UIScreen Screen)
 {
     local string Current;
+
+    if (!IsAvengerHUD(Screen))
+        return;
 
     Current = class'XiPod_Settings'.static.GetCurrentScreen();
 
@@ -61,5 +76,5 @@ function DoDelayedAvengerEmit()
 
 defaultproperties
 {
-    ScreenClass = class'UIAvengerHUD'
+    ScreenClass = none
 }

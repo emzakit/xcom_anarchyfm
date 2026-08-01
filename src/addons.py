@@ -1,8 +1,9 @@
 """Music addons — Workshop music packs, discovered and played in place.
 
-A music addon is any Workshop mod folder containing a `*_xipod.json`
+A music addon is any Workshop mod folder containing an `xipod_settings.json`
 descriptor. The descriptor maps game states to folders of audio files inside
-that mod. See MODDING_GUIDE.md for the authoring side.
+that mod. See the Making a music pack guide in the wiki for the authoring
+side.
 
 Addons used to be *copied* into the user's music folder on startup. They
 aren't any more, for two reasons:
@@ -28,7 +29,18 @@ import os
 import console
 
 
-# Descriptor filenames end with this. Matches the modding guide.
+# What marks a folder as a music pack.
+#
+# One fixed filename, so building a pack means dropping the template in and
+# editing it — no renaming to match your mod, and no way to get the rename
+# subtly wrong and end up with a pack the app can't see. It's also cheaper to
+# find: an exact name is a single stat, where a suffix means listing every
+# candidate folder's contents.
+DESCRIPTOR_NAME = "xipod_settings.json"
+
+# The original scheme, `<ModName>_xipod.json`. Still honoured so packs
+# published before the change keep working — there is no upside to breaking
+# someone's uploaded mod over a filename.
 DESCRIPTOR_SUFFIX = "_xipod.json"
 
 
@@ -111,7 +123,16 @@ def _read_descriptor(path):
 
 
 def _find_descriptor(folder):
-    """The descriptor file directly inside `folder`, or None."""
+    """The descriptor file directly inside `folder`, or None.
+
+    Checks the fixed name first — one stat, and it's what every pack built
+    from the current template uses. Only falls back to scanning for the old
+    `*_xipod.json` suffix when that misses.
+    """
+    fixed = os.path.join(folder, DESCRIPTOR_NAME)
+    if os.path.isfile(fixed):
+        return fixed
+
     try:
         for fname in sorted(os.listdir(folder)):
             if fname.lower().endswith(DESCRIPTOR_SUFFIX):
@@ -234,6 +255,29 @@ def load_enabled_map(config_path):
     if not isinstance(raw, dict):
         return {}
     return {str(k): bool(v) for k, v in raw.items()}
+
+
+def prune_enabled_map(config_path, known_ids):
+    """Forget the on/off setting for packs that aren't installed any more.
+
+    The descriptor is the identity: no `xipod_settings.json` in a folder, no
+    pack. A
+    remembered setting for something that no longer exists is just noise that
+    builds up in the config forever, and it comes back to life confusingly if
+    a folder of the same name ever reappears.
+
+    Call this only when the folders were genuinely readable — see
+    setup.discover_addons. An unplugged drive looks exactly like every pack
+    being uninstalled at once, and that would quietly reset everyone's
+    choices.
+    """
+    current = load_enabled_map(config_path)
+    kept = {k: v for k, v in current.items() if k in known_ids}
+    if kept == current:
+        return
+    dropped = sorted(set(current) - set(kept))
+    save_enabled_map(config_path, kept)
+    console.debug(f"Forgot {len(dropped)} uninstalled addon(s): {', '.join(dropped)}")
 
 
 def save_enabled_map(config_path, enabled_map):
