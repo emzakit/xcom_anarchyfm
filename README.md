@@ -146,7 +146,7 @@ and your own API keys — it drives *your* account through *your* registration.
 ### 📦 Music Addons
 
 Subscribe to a Workshop music pack and it just turns up in your library. Flick
-packs on and off, sort by genre. Nothing gets copied to your drive.
+packs on and off, sort by genre. Nothing gets copied to your drive. You don't need to enable them in any mod launcher, the app will automatically detect them and allow you to toggle on/off.
 
 **[Music Addons →](https://github.com/emzakit/xcom_anarchyfm/wiki/Features#music-addons)**
 · **[Make your own →](https://github.com/emzakit/xcom_anarchyfm/wiki/Making-a-music-pack)**
