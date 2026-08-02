@@ -41,14 +41,11 @@ and no discernible survival instinct.
 They have no idea XCOM is listening. They'd be alarmed to find out. They have
 never once stopped talking.
 
-Firaxis gave you a soundtrack. Very nice. Very orchestral. Very **the same, 40
-hours later.** This is the other option — and it takes requests.
+We've got eyes on your troops, Commander, and we give them the soundtrack their efforts deserve.
 
 - 🎻 **Hans Zimmer** scoring the Geoscape while the world quietly ends? Go on then.
 - 🤘 **Slipknot** the instant a Sectoid pops out? Absolutely.
-- 💃 **The Spice Girls** over an ADVENT ambush because you thought it'd be funny and now it's canon? Nobody here is stopping you.
-
-We've got eyes on your troops, Commander, and we give them the soundtrack their efforts deserve.
+- 💃 **The Spice Girls** over an ADVENT ambush because you thought it'd be funny? Nobody here is stopping you.
 
 **Anarchy Radio FM replaces XCOM 2's soundtrack with whatever you want.** Drop
 files into folders. Each screen gets its own music. That's the entire idea.
