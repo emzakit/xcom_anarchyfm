@@ -10,21 +10,20 @@ from paths import resource_path
 
 _DEFAULTS_PATH = resource_path("xipod_defaults.json")
 
-# Base states (each may also have a _LOOP sibling folder)
-BASE_STATES = [
-    "state_shell_menu", "state_avenger", "state_geoscape",
-    "state_squadselect", "state_mission_explore", "state_mission_combat",
-]
-
-# States that support loop variants (all base states get _loop siblings)
-LOOP_STATES = {s + "_loop" for s in BASE_STATES}
-
-# Stinger states — no loop variant
-STINGER_STATES = ["state_victory", "state_defeat"]
-
-# Shared radio folder — when the radio toggle is ON for a state,
-# tracks play from here instead of the state's own folder.
-RADIO_STATE = "state_resistance_radio"
+# The state taxonomy comes from helpers/state_folders.json via state_schema —
+# one file to change when a state is added, rather than four that had to be
+# kept in agreement by hand. Re-exported here because this is where the rest of
+# the app has always imported them from.
+#
+#   BASE_STATES     — states with their own folder and a _LOOP sibling
+#   LOOP_STATES     — the _loop variants
+#   STINGER_STATES  — play once, no loop, no advance (victory/defeat)
+#   RADIO_STATE     — the shared Resistance Radio folder, used when a state's
+#                     radio toggle is on instead of its own folder
+import state_schema
+from state_schema import (           # noqa: F401  (re-exported)
+    BASE_STATES, LOOP_STATES, STINGER_STATES, RADIO_STATE, ALL_KNOWN,
+)
 
 # The only state the Radio Mode button applies to. Resistance-radio content
 # is long-form downtime atmosphere — DJ banter, fake adverts, hour-long
@@ -47,15 +46,9 @@ RADIO_SOURCES = (RADIO_SOURCE_RADIO, RADIO_SOURCE_STATE, RADIO_SOURCE_BOTH)
 AUDIO_EXTENSIONS = (".mp3", ".wav", ".ogg", ".flac", ".m4a", ".opus", ".wma")
 
 # The state folders a Workshop addon can ship, upper-cased as they appear on
-# disk. RADIO_STATE is included: a station pack is exactly the sort of thing
-# people want to share.
-STATE_FOLDERS_FOR_MODS = tuple(
-    s.upper() for s in
-    (BASE_STATES + sorted(LOOP_STATES) + STINGER_STATES + [RADIO_STATE])
-)
-
-# Everything the scanner recognises as a valid folder
-ALL_KNOWN = set(BASE_STATES) | LOOP_STATES | set(STINGER_STATES) | {RADIO_STATE}
+# disk. The radio folder is included: a station pack is exactly the sort of
+# thing people want to share.
+STATE_FOLDERS_FOR_MODS = tuple(state_schema.STATE_FOLDERS)
 
 
 # How much a source's chance is cut for every track it has just played back

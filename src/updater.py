@@ -11,11 +11,23 @@ let a running exe be overwritten. So applying an update is a three-step dance:
      files over the install folder, and relaunches us.
   3. Spawn that .bat detached and quit.
 
-The copy is deliberately a plain copy-over rather than a mirror. A mirror
-(robocopy /MIR) would delete anything not in the new build — which is to say
-the user's xipod_config.json, their presets, and their entire music library if
-they unzipped the app into their music folder. Stale files from an old version
-lingering is a much smaller problem than that.
+The copy is done in two passes, because the install folder holds two very
+different kinds of thing:
+
+  * The install ROOT is shared with the user. xipod_config.json, presets, and
+    quite possibly their entire music library live here, because the app is
+    portable and people unzip it wherever they like. This pass is additive
+    (robocopy /E). Mirroring it would delete all of that.
+
+  * _internal/ is generated wholly by PyInstaller and contains nothing the user
+    or the app ever writes — data_path() resolves to the root, never here. This
+    pass IS a mirror (/MIR), and needs to be.
+
+That second point used to be additive too, which was wrong twice over. Files
+dropped between versions lingered forever, so an install accumulated debris
+from every version it had ever been. Worse, a onedir exe embeds a PYZ whose
+module set has to match the .pyd/.dll files sitting beside it in _internal —
+so a half-old _internal isn't untidy, it's a build that was never tested.
 
 Everything here is stdlib. Nothing is executed from the download: we extract a
 zip of data files and copy them, and the only thing spawned is a .bat we wrote
@@ -33,6 +45,7 @@ import urllib.parse
 import urllib.request
 import zipfile
 
+import build_manifest
 import console
 import version
 from paths import is_frozen
@@ -194,14 +207,39 @@ def _find_build_root(extracted):
 
 
 def stage(zip_path):
-    """Extract an update and return the folder to copy from. Raises if the
-    archive doesn't contain our app."""
+    """Extract an update, verify it, and return the folder to copy from.
+
+    Raises if the archive doesn't contain our app, or if it contains a
+    build.json that doesn't match what was actually extracted. Verification
+    happens HERE, before a single file is copied over someone's install —
+    once the swap starts there's no clean way back.
+
+    A build without a manifest verifies trivially. Older releases have none,
+    and refusing to install them would be a worse bug than the one this guards
+    against.
+    """
     staging = os.path.join(os.path.dirname(zip_path), "staged")
     os.makedirs(staging, exist_ok=True)
     _safe_extract(zip_path, staging)
     build_root = _find_build_root(staging)
     if not build_root:
         raise ValueError(f"{EXE_NAME} not found in the download — not applying it.")
+
+    manifest = build_manifest.read(build_root)
+    if manifest:
+        ok, problems = build_manifest.verify(build_root, manifest)
+        if not ok:
+            shown = "\n  ".join(problems[:5])
+            more = f"\n  ...and {len(problems) - 5} more" if len(problems) > 5 else ""
+            raise ValueError(
+                "The download didn't survive the trip intact:\n  "
+                f"{shown}{more}\n"
+                "Nothing has been changed. Try again, or download it by hand.")
+        console.debug(
+            f"Update verified: {len(manifest.get('files') or {})} files, "
+            f"version {manifest.get('version') or '?'}")
+    else:
+        console.debug("Update has no build.json — installing without verification.")
     return build_root
 
 
@@ -217,50 +255,140 @@ def apply_and_restart(build_root, install_dir=None, exe_path=None):
     helper = os.path.join(helper_dir, "apply_update.bat")
 
     excludes = " ".join(_KEEP)
+
+    # Paths arrive as ARGUMENTS, never baked into the script text. cmd reads a
+    # .bat in the console's OEM codepage, so a path written into the file as
+    # UTF-8 is misread the moment it leaves ASCII — and "C:\Users\Jörg\Music"
+    # is an entirely ordinary thing to have. Arguments come through the
+    # process API as UTF-16 and survive intact.
+    #
+    # The body below is therefore kept strictly ASCII. Do not put an em dash in
+    # here: the shipped v2.2-v2.4 script had one, and non-ASCII bytes in a .bat
+    # are exactly the kind of thing that works on your machine and not theirs.
     script = f"""@echo off
 setlocal
-rem Anarchy Radio FM updater — written by the app, not shipped with it.
-rem Waits for the running app to exit, copies the new build over the install,
-rem then relaunches. Deliberately NOT /MIR: mirroring would delete the user's
-rem config and any music they keep alongside the exe.
+rem Anarchy Radio FM updater - written by the app, not shipped with it.
+rem Waits for the running app to exit, swaps the new build in, relaunches.
+rem   %1 = new build   %2 = install dir   %3 = exe to relaunch   %4 = staging
+
+set "SRC=%~1"
+set "DST=%~2"
+set "APP=%~3"
+set "STAGING=%~4"
+set "LOG=%TEMP%\\anarchyfm_update.log"
+
+echo Anarchy Radio FM update log - %DATE% %TIME% > "%LOG%"
+echo   from: %SRC% >> "%LOG%"
+echo   to  : %DST% >> "%LOG%"
+
+rem System32 tools by full path. "find" in particular is a byword for being
+rem shadowed - Git for Windows, the WSL shims and half the unix ports for
+rem Windows all ship one. If the wrong find answers here it errors instead of
+rem matching, the loop exits immediately, and robocopy then tries to overwrite
+rem an exe that is still running. Silent, and miserable to reproduce.
+set "SYS=%SystemRoot%\\System32"
 
 echo Waiting for Anarchy Radio FM to close...
 :waitloop
-tasklist /FI "PID eq {os.getpid()}" 2>nul | find "{os.getpid()}" >nul
+"%SYS%\\tasklist.exe" /FI "PID eq {os.getpid()}" 2>nul | "%SYS%\\find.exe" "{os.getpid()}" >nul
 if not errorlevel 1 (
-    ping -n 2 127.0.0.1 >nul
+    "%SYS%\\ping.exe" -n 2 127.0.0.1 >nul
     goto waitloop
 )
 
 echo Applying update...
-robocopy "{build_root}" "{install_dir}" /E /R:3 /W:1 /XF {excludes} >nul
-if errorlevel 8 (
-    echo.
-    echo The update could not be applied automatically.
-    echo Your existing install has not been changed.
-    echo You can copy the new files over manually from:
-    echo   {build_root}
-    echo.
-    pause
-    exit /b 1
+
+rem Pass 1 - the install root, ADDITIVE. Shared with the user: their config,
+rem presets and quite possibly their whole music library live here.
+echo [pass 1] root, additive >> "%LOG%"
+"%SYS%\\robocopy.exe" "%SRC%" "%DST%" /E /R:3 /W:1 /XF {excludes} /XD "%SRC%\\_internal" >> "%LOG%" 2>&1
+if errorlevel 8 goto failed
+
+rem Pass 2 - _internal, MIRRORED. Entirely PyInstaller's; the app never writes
+rem here. Mirroring clears out files dropped between versions, which an
+rem additive copy left behind forever.
+if exist "%SRC%\\_internal" (
+    echo [pass 2] _internal, mirrored >> "%LOG%"
+    robocopy "%SRC%\\_internal" "%DST%\\_internal" /MIR /R:3 /W:1 >> "%LOG%" 2>&1
+    if errorlevel 8 goto failed
 )
 
-start "" "{exe_path}"
-rem Clean up the staging folder; leave this script's own folder to the OS.
-rmdir /S /Q "{os.path.dirname(build_root)}" >nul 2>&1
+rem Don't relaunch something that isn't there - a missing exe here means the
+rem swap went wrong in a way robocopy's exit code didn't cover.
+if not exist "%DST%\\{EXE_NAME}" goto failed
+
+echo [done] update applied >> "%LOG%"
+start "" "%APP%"
+rem Clean up staging on success only; on failure it's the manual fallback.
+if not "%STAGING%"=="" rmdir /S /Q "%STAGING%" >nul 2>&1
 exit /b 0
+
+:failed
+echo [FAILED] >> "%LOG%"
+echo.
+echo The update could not be applied cleanly.
+echo.
+echo Anarchy Radio FM has NOT been started, in case the install is
+echo half-updated. You can finish it by hand: copy everything from
+echo   %SRC%
+echo over
+echo   %DST%
+echo.
+echo A log of what happened is at:
+echo   %LOG%
+echo.
+pause
+exit /b 1
 """
-    with open(helper, "w", encoding="utf-8") as f:
+    # ASCII, so the file is byte-identical under every Windows codepage.
+    with open(helper, "w", encoding="ascii", newline="\r\n") as f:
         f.write(script)
 
     creation = 0
     if sys.platform == "win32":
         creation = getattr(subprocess, "DETACHED_PROCESS", 0) | \
                    getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
-    subprocess.Popen(["cmd", "/c", helper], cwd=helper_dir,
-                     creationflags=creation, close_fds=True)
+    subprocess.Popen(["cmd", "/c", helper, build_root, install_dir, exe_path,
+                      os.path.dirname(build_root)],
+                     cwd=helper_dir, creationflags=creation, close_fds=True)
     console.shen("Update staged — closing so it can be applied.")
     return helper
+
+
+def report_install():
+    """Log what version is actually running, and flag a half-applied update.
+
+    The version compiled into the exe and the version in build.json come from
+    opposite ends of an update: one from the new exe, one from the new build's
+    manifest. They disagree only if the swap didn't finish — which used to be
+    completely silent, so "the updater ran and nothing changed" and "the
+    updater ran and everything changed" looked identical from the outside.
+
+    Never raises, never blocks startup. Worst case it says nothing.
+    """
+    running = version.__version__
+    if not is_frozen():
+        console.debug(f"Anarchy Radio FM {running} (from source)")
+        return
+
+    try:
+        install_dir = os.path.dirname(sys.executable)
+        recorded = build_manifest.installed_version(install_dir)
+    except Exception:
+        return
+
+    if not recorded:
+        console.debug(f"Anarchy Radio FM {running}")
+        return
+
+    if version.parse(recorded) == version.parse(running):
+        console.debug(f"Anarchy Radio FM {running} (build verified)")
+        return
+
+    console.warn(
+        f"This install looks half-updated: the app reports {running}, but the "
+        f"build alongside it says {recorded}. Re-run the update, or unzip a "
+        f"fresh copy over this folder.")
 
 
 def open_releases_page():

@@ -1,0 +1,53 @@
+{
+  "_comment": [
+    "The game states Anarchy Radio FM scores, and everything that follows from",
+    "them: which folder each one reads, whether it has a _LOOP sibling, and",
+    "which settings key carries its toggle and its loop flag.",
+    "",
+    "This is the single source of truth. It used to be spread across three",
+    "files that had to be kept in agreement by hand: setup.STATE_FOLDERS listed",
+    "the folder names, library.BASE_STATES / STINGER_STATES / RADIO_STATE",
+    "derived the same set a different way, and settings._get_toggle_key /",
+    "_get_loop_key held the mappings in two more dicts. Adding a state meant",
+    "finding all four.",
+    "",
+    "Read by src/state_schema.py. Bundled into the build by the .spec file.",
+    "",
+    "FIELDS",
+    "  key          the state string the mod reports, lower case. The folder on",
+    "               disk is this upper-cased.",
+    "  toggle       settings key for 'play my music on this screen'. Explore and",
+    "               combat deliberately share 'battle' - one screen to the user.",
+    "  loop         settings key for the loop flag, or null for states that",
+    "               cannot loop. Explore and combat get their OWN loop keys even",
+    "               though they share a toggle, so a phase can loop alone.",
+    "  loop_folder  true if a _LOOP sibling folder exists for this state.",
+    "  role         'music' (default), 'stinger' (plays once, never advances),",
+    "               or 'radio' (the shared Resistance Radio folder).",
+    "",
+    "loop_masters maps a loop key to a broader one that also switches it on, so",
+    "the Battle box loops the whole mission while Explore and Combat narrow it",
+    "to a single phase."
+  ],
+
+  "version": 1,
+
+  "states": [
+    { "key": "state_shell_menu",      "toggle": "shell_menu",  "loop": "shell_menu",  "loop_folder": true },
+    { "key": "state_avenger",         "toggle": "avenger",     "loop": "avenger",     "loop_folder": true },
+    { "key": "state_geoscape",        "toggle": "geoscape",    "loop": "geoscape",    "loop_folder": true },
+    { "key": "state_squadselect",     "toggle": "squadselect", "loop": "squadselect", "loop_folder": true },
+    { "key": "state_mission_explore", "toggle": "battle",      "loop": "explore",     "loop_folder": true },
+    { "key": "state_mission_combat",  "toggle": "battle",      "loop": "combat",      "loop_folder": true },
+
+    { "key": "state_victory", "toggle": "victory", "loop": null, "loop_folder": false, "role": "stinger" },
+    { "key": "state_defeat",  "toggle": "defeat",  "loop": null, "loop_folder": false, "role": "stinger" },
+
+    { "key": "state_resistance_radio", "toggle": null, "loop": null, "loop_folder": false, "role": "radio" }
+  ],
+
+  "loop_masters": {
+    "explore": "battle",
+    "combat": "battle"
+  }
+}

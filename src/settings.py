@@ -3,34 +3,22 @@
 import json
 import os
 import console
+import state_schema
 
 
 def _get_toggle_key(top_state):
-    """Map a top-level state string to its toggle/volume key."""
-    mapping = {
-        "state_shell_menu": "shell_menu",
-        "state_avenger": "avenger",
-        "state_geoscape": "geoscape",
-        "state_squadselect": "squadselect",
-        "state_mission_explore": "battle",
-        "state_mission_combat": "battle",
-        "state_victory": "victory",
-        "state_defeat": "defeat",
-    }
-    return mapping.get(top_state)
+    """Map a top-level state string to its toggle/volume key.
+
+    Explore and combat both answer to "battle" — one screen as far as the user
+    is concerned, and one bucket as far as MMS silencing is concerned.
+    """
+    return state_schema.TOGGLE_KEYS.get(top_state)
 
 
 def _get_loop_key(top_state):
-    """Map a state to its loop toggle key. Explore and combat get their own."""
-    loop_mapping = {
-        "state_shell_menu": "shell_menu",
-        "state_avenger": "avenger",
-        "state_geoscape": "geoscape",
-        "state_squadselect": "squadselect",
-        "state_mission_explore": "explore",
-        "state_mission_combat": "combat",
-    }
-    return loop_mapping.get(top_state)
+    """Map a state to its loop toggle key. Explore and combat get their own,
+    so a single mission phase can loop without the other."""
+    return state_schema.LOOP_KEYS.get(top_state)
 
 
 # A loop key that a broader toggle also switches on. Battle covers the whole
@@ -40,10 +28,7 @@ def _get_loop_key(top_state):
 # Without this, bLoopBattle was written to the ini and shown in MCM but read
 # by nothing at all: no state maps to the "battle" LOOP key, so the checkbox
 # was inert.
-_LOOP_MASTERS = {
-    "explore": "battle",
-    "combat": "battle",
-}
+_LOOP_MASTERS = dict(state_schema.LOOP_MASTERS)
 
 
 # ------------------------------------------------------------------ #

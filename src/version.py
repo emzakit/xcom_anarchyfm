@@ -7,7 +7,7 @@ if this drifts behind the tag the app will offer people an update they already
 have.
 """
 
-__version__ = "2.4"
+__version__ = "2.4.1"
 
 # owner/repo — the only place updates are ever fetched from.
 GITHUB_REPO = "emzakit/xcom_anarchyfm"

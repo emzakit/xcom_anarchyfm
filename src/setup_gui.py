@@ -215,32 +215,57 @@ class SetupWindow(QWidget):
             self.config_field.setText(existing_cfg.get("game_config_folder", ""))
             self.addon_test_field.setText(existing_cfg.get("addon_test_folder", ""))
 
-        # Both of these live next to the app by default, so a first run has
-        # nothing to think about: accept the defaults and everything lands in
-        # one portable folder. Only pre-filled when empty, so an existing
-        # config's choices are never overwritten.
+        # The music folder lives next to the app by default, so a first run has
+        # nothing to think about. Only pre-filled when empty, so an existing
+        # config's choice is never overwritten.
         if not self.music_field.text().strip():
             self.music_field.setText(os.path.normpath(default_music_folder()))
-        if not self.addon_test_field.text().strip():
-            # Prefers ModBuddy's output folder, so a built pack is testable
-            # without copying it anywhere.
-            self.addon_test_field.setText(os.path.normpath(
-                default_addon_test_folder(
-                    game_exe=self.exe_field.text().strip(),
-                    workshop_folder=self.workshop_field.text().strip())))
 
-        # Auto-detect the workshop folder if not pre-filled. It's required
-        # now, so filling it in beats making the user go hunting for it.
+        # What default_addon_test_folder falls back to when it can't find the
+        # SDK. Held so autofill can tell its own guess apart from a path the
+        # user chose, and only ever replace the former.
+        self._addon_test_fallback = os.path.normpath(default_addon_test_folder())
+
+        self._autofill_from_exe()
+
+    def _autofill_from_exe(self):
+        """Fill in every path the game exe lets us work out.
+
+        Ordered by dependency, because these are derived from each other: the
+        workshop folder comes from the exe, and the addon test folder comes
+        from the steamapps root that either of them reveals.
+
+        Getting that order wrong is what made ModBuddy detection look broken.
+        The addon test default used to be computed BEFORE the workshop
+        auto-detect, so on a first run it was asked the question while both
+        inputs were still blank, failed to find the SDK every time, and settled
+        on the folder beside the app.
+
+        Runs again whenever the exe changes, since that's the point at which
+        the answers become knowable. Never overwrites anything the user typed.
+        """
+        exe = self.exe_field.text().strip()
+
+        # Required now, so filling it in beats making the user go hunting.
         if not self.workshop_field.text().strip():
-            auto_ws = find_workshop_folder(self.exe_field.text().strip())
+            auto_ws = find_workshop_folder(exe)
             if auto_ws:
                 self.workshop_field.setText(os.path.normpath(auto_ws))
 
-        # Auto-detect config folder if not pre-filled
         if not self.config_field.text().strip():
             auto_config = _find_game_config_folder()
             if auto_config:
                 self.config_field.setText(auto_config)
+
+        # Prefers ModBuddy's output folder, so a freshly built pack is testable
+        # without copying it anywhere. Replaced only when it's empty or still
+        # holding our own fallback — a path the user picked always stands.
+        current = self.addon_test_field.text().strip()
+        if not current or os.path.normpath(current) == self._addon_test_fallback:
+            self.addon_test_field.setText(os.path.normpath(
+                default_addon_test_folder(
+                    game_exe=exe,
+                    workshop_folder=self.workshop_field.text().strip())))
 
     # ------------------------------------------------------------ #
     #  UI Builders
@@ -311,6 +336,10 @@ class SetupWindow(QWidget):
         )
         if path:
             field.setText(os.path.normpath(path))
+            # On a genuine first run this is the moment everything downstream
+            # becomes knowable — before it, there's no steamapps root to find
+            # the workshop folder or the SDK from.
+            self._autofill_from_exe()
 
     def _browse_music(self, field):
         path = QFileDialog.getExistingDirectory(self, "Select Music Library Folder")

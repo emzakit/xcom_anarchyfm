@@ -26,6 +26,10 @@ a = Analysis(
     datas=[
         # (source, dest-folder-inside-bundle) — read via paths.resource_path()
         ("xipod_defaults.json", "."),
+        # The state taxonomy. src/state_schema.py refuses to start without it,
+        # deliberately: no states means no folders, no music and no silencing,
+        # which is a far worse thing to debug than a clear error at launch.
+        ("helpers/state_folders.json", "helpers"),
         ("assets/banner.png", "assets"),
         # Checkbox tick — referenced by url() from the stylesheet, so it has
         # to exist on disk at runtime rather than being imported.

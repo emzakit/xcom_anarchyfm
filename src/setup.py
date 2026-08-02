@@ -9,6 +9,7 @@ import os
 import json
 import shutil
 import console
+import state_schema
 
 from paths import data_path
 from library import AUDIO_EXTENSIONS
@@ -16,24 +17,11 @@ from library import AUDIO_EXTENSIONS
 # Per-user config — lives next to the exe when frozen, project root in dev.
 CONFIG_PATH = data_path("xipod_config.json")
 
-# Every state folder the music library expects
-STATE_FOLDERS = [
-    "STATE_SHELL_MENU",
-    "STATE_SHELL_MENU_LOOP",
-    "STATE_AVENGER",
-    "STATE_AVENGER_LOOP",
-    "STATE_GEOSCAPE",
-    "STATE_GEOSCAPE_LOOP",
-    "STATE_SQUADSELECT",
-    "STATE_SQUADSELECT_LOOP",
-    "STATE_MISSION_EXPLORE",
-    "STATE_MISSION_EXPLORE_LOOP",
-    "STATE_MISSION_COMBAT",
-    "STATE_MISSION_COMBAT_LOOP",
-    "STATE_VICTORY",
-    "STATE_DEFEAT",
-    "STATE_RESISTANCE_RADIO",
-]
+# Every state folder the music library expects, from helpers/state_folders.json.
+# This was a hand-written list that had to match what library.py derived from
+# its own state groupings; they were two spellings of one fact, and a test
+# existed solely to check they still agreed.
+STATE_FOLDERS = list(state_schema.STATE_FOLDERS)
 
 
 # ------------------------------------------------------------------ #

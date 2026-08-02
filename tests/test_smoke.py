@@ -14,8 +14,12 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
+import zipfile
+
+import build_manifest
 import mms_config
 import process_utils
+import updater
 import settings as settings_mod
 from settings import EngineSettings
 from library import (
@@ -79,6 +83,162 @@ class TestSettingsRoundTrip(unittest.TestCase):
         self.assertEqual(s1.random_start, s2.random_start)
         self.assertEqual(s1.presets, s2.presets)
         self.assertEqual(s1.fx_params, s2.fx_params)
+
+
+class TestBuildManifest(unittest.TestCase):
+    """build.json proves a download arrived intact, and catches an update that
+    only half applied."""
+
+    def _build(self, tmp, files):
+        for rel, text in files.items():
+            path = os.path.join(tmp, rel.replace("/", os.sep))
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(text)
+        return tmp
+
+    def test_write_then_verify_round_trips(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._build(tmp, {"AnarchyRadioFM.exe": "exe",
+                              "_internal/thing.pyd": "pyd",
+                              "_internal/assets/check_x.svg": "svg"})
+            build_manifest.write(tmp, "9.9")
+            manifest = build_manifest.read(tmp)
+            self.assertEqual(manifest["version"], "9.9")
+            self.assertEqual(sorted(manifest["files"]),
+                             ["AnarchyRadioFM.exe",
+                              "_internal/assets/check_x.svg",
+                              "_internal/thing.pyd"])
+            # Paths are stored forward-slashed so they're platform-stable.
+            self.assertTrue(all("\\" not in k for k in manifest["files"]))
+            self.assertEqual(build_manifest.verify(tmp), (True, []))
+
+    def test_corruption_and_truncation_are_caught(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._build(tmp, {"AnarchyRadioFM.exe": "exe",
+                              "_internal/thing.pyd": "pyd"})
+            build_manifest.write(tmp, "9.9")
+
+            # Same length, different content — the old size-only check passed this.
+            with open(os.path.join(tmp, "AnarchyRadioFM.exe"), "w") as f:
+                f.write("EXE")
+            ok, problems = build_manifest.verify(tmp)
+            self.assertFalse(ok)
+            self.assertIn("corrupt: AnarchyRadioFM.exe", problems)
+
+    def test_missing_file_is_caught(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._build(tmp, {"AnarchyRadioFM.exe": "exe",
+                              "_internal/thing.pyd": "pyd"})
+            build_manifest.write(tmp, "9.9")
+            os.remove(os.path.join(tmp, "_internal", "thing.pyd"))
+            ok, problems = build_manifest.verify(tmp)
+            self.assertFalse(ok)
+            self.assertIn("missing: _internal/thing.pyd", problems)
+
+    def test_user_files_are_not_part_of_the_build(self):
+        """Config and presets appear after install. Hashing them would make
+        every install fail verification the moment someone changed a setting."""
+        with tempfile.TemporaryDirectory() as tmp:
+            self._build(tmp, {"AnarchyRadioFM.exe": "exe",
+                              "xipod_config.json": "{}",
+                              "xipod_presets.json": "{}"})
+            build_manifest.write(tmp, "9.9")
+            self.assertEqual(list(build_manifest.read(tmp)["files"]),
+                             ["AnarchyRadioFM.exe"])
+            with open(os.path.join(tmp, "xipod_config.json"), "w") as f:
+                f.write('{"changed": true}')
+            self.assertEqual(build_manifest.verify(tmp), (True, []))
+
+    def test_build_without_a_manifest_still_verifies(self):
+        """Releases predating build.json must keep installing."""
+        with tempfile.TemporaryDirectory() as tmp:
+            self._build(tmp, {"AnarchyRadioFM.exe": "exe"})
+            self.assertIsNone(build_manifest.read(tmp))
+            self.assertEqual(build_manifest.verify(tmp), (True, []))
+
+    def test_unreadable_manifest_is_ignored_not_fatal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._build(tmp, {"AnarchyRadioFM.exe": "exe"})
+            with open(os.path.join(tmp, "build.json"), "w") as f:
+                f.write("{ not json")
+            self.assertIsNone(build_manifest.read(tmp))
+            self.assertEqual(build_manifest.verify(tmp), (True, []))
+
+    def test_installed_version_reads_the_stamp(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._build(tmp, {"AnarchyRadioFM.exe": "exe"})
+            build_manifest.write(tmp, "2.4")
+            self.assertEqual(build_manifest.installed_version(tmp), "2.4")
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(build_manifest.installed_version(tmp), "")
+
+
+class TestUpdaterStaging(unittest.TestCase):
+    """Verification happens before anything is copied over an install."""
+
+    def _zip_build(self, tmp, files, version_str=None):
+        build = os.path.join(tmp, "AnarchyRadioFM")
+        for rel, text in files.items():
+            path = os.path.join(build, rel.replace("/", os.sep))
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(text)
+        if version_str:
+            build_manifest.write(build, version_str)
+        zip_path = os.path.join(tmp, "AnarchyRadioFM_APP_v9.9.zip")
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            for root, _dirs, names in os.walk(build):
+                for name in names:
+                    full = os.path.join(root, name)
+                    zf.write(full, os.path.join(
+                        "AnarchyRadioFM", os.path.relpath(full, build)))
+        return zip_path
+
+    def test_good_build_stages(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            zp = self._zip_build(tmp, {"AnarchyRadioFM.exe": "exe",
+                                       "_internal/a.pyd": "a"}, "9.9")
+            root = updater.stage(zp)
+            self.assertTrue(os.path.isfile(
+                os.path.join(root, "AnarchyRadioFM.exe")))
+
+    def test_tampered_build_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            build = os.path.join(tmp, "AnarchyRadioFM")
+            os.makedirs(os.path.join(build, "_internal"))
+            for rel, text in (("AnarchyRadioFM.exe", "exe"),
+                              ("_internal/a.pyd", "aaa")):
+                with open(os.path.join(build, rel.replace("/", os.sep)), "w") as f:
+                    f.write(text)
+            build_manifest.write(build, "9.9")
+            # Corrupt AFTER hashing, keeping the length identical.
+            with open(os.path.join(build, "_internal", "a.pyd"), "w") as f:
+                f.write("bbb")
+            zip_path = os.path.join(tmp, "AnarchyRadioFM_APP_v9.9.zip")
+            with zipfile.ZipFile(zip_path, "w") as zf:
+                for root, _dirs, names in os.walk(build):
+                    for name in names:
+                        full = os.path.join(root, name)
+                        zf.write(full, os.path.join(
+                            "AnarchyRadioFM", os.path.relpath(full, build)))
+
+            with self.assertRaises(ValueError) as ctx:
+                updater.stage(zip_path)
+            self.assertIn("_internal/a.pyd", str(ctx.exception))
+
+    def test_zip_without_our_exe_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            zip_path = os.path.join(tmp, "AnarchyRadioFM_APP_v9.9.zip")
+            with zipfile.ZipFile(zip_path, "w") as zf:
+                zf.writestr("something/readme.txt", "not our app")
+            with self.assertRaises(ValueError):
+                updater.stage(zip_path)
+
+    def test_unversioned_build_still_stages(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            zp = self._zip_build(tmp, {"AnarchyRadioFM.exe": "exe"})
+            self.assertTrue(os.path.isdir(updater.stage(zp)))
 
 
 class TestLoopResolution(unittest.TestCase):
@@ -846,6 +1006,38 @@ class TestMusicAddons(unittest.TestCase):
                              {"111": False, "222": True})
             with open(cfg, encoding="utf-8") as f:
                 self.assertEqual(json.load(f)["music_folder"], "X:/keep")
+
+    def test_schema_is_the_only_source_of_state_folders(self):
+        """setup.STATE_FOLDERS and library.STATE_FOLDERS_FOR_MODS used to be
+        two hand-written spellings of one fact. Both now come from
+        helpers/state_folders.json, so they cannot drift apart."""
+        import state_schema
+        from library import STATE_FOLDERS_FOR_MODS
+
+        self.assertEqual(list(STATE_FOLDERS), list(state_schema.STATE_FOLDERS))
+        self.assertEqual(list(STATE_FOLDERS_FOR_MODS), list(STATE_FOLDERS))
+
+        # Every folder maps back to a state the scanner recognises.
+        for folder in STATE_FOLDERS:
+            self.assertIn(folder.lower(), state_schema.ALL_KNOWN, folder)
+        self.assertEqual(len(STATE_FOLDERS), len(state_schema.ALL_KNOWN))
+
+        # Each looping state is immediately followed by its own _LOOP sibling.
+        for i, folder in enumerate(STATE_FOLDERS):
+            if folder.endswith("_LOOP"):
+                self.assertEqual(STATE_FOLDERS[i - 1], folder[:-len("_LOOP")])
+
+    def test_schema_key_mappings_match_settings(self):
+        import state_schema
+        import settings as settings_module
+
+        for state, toggle in state_schema.TOGGLE_KEYS.items():
+            self.assertEqual(settings_module._get_toggle_key(state), toggle)
+        for state, loop in state_schema.LOOP_KEYS.items():
+            self.assertEqual(settings_module._get_loop_key(state), loop)
+        # Stingers and the radio folder have no loop key at all.
+        for state in list(state_schema.STINGER_STATES) + [state_schema.RADIO_STATE]:
+            self.assertIsNone(settings_module._get_loop_key(state), state)
 
     def test_state_folders_all_uppercase(self):
         """Descriptors canonicalize to upper — folder list must already be upper."""
