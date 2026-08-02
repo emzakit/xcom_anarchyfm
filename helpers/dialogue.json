@@ -1,0 +1,237 @@
+{
+  "_comment": [
+    "Everything the station says. Edit here, not in the code.",
+    "",
+    "WHO'S TALKING",
+    "",
+    "  jax / silo — the two idiots running the station. THEY DO NOT KNOW",
+    "         ANYONE FROM XCOM IS LISTENING. You've tuned into their",
+    "         frequency; they're just doing their show. So they never address",
+    "         the Commander, never say 'sir', never acknowledge the app or the",
+    "         game, and never break character. They talk to each other and to",
+    "         whatever ragged audience they imagine is out there. Unhinged,",
+    "         over-caffeinated, running on stolen equipment and spite.",
+    "",
+    "  shen — Lily Shen, monitoring the frequency from the Avenger. She DOES",
+    "         know you're listening and addresses you directly. Hers is the",
+    "         only voice that mentions the app, settings, updates or faults.",
+    "         When something is actually wrong, she says so.",
+    "",
+    "The split is by JOB as well as voice — jax is on the decks (tracks,",
+    "playlists), silo is on the wire (incoming, the outside world) — so the log",
+    "still tells you what happened underneath the patter.",
+    "",
+    "Placeholders like {state} carry raw values such as state_mission_combat.",
+    "Keep them in: they're the actual information, and someone diagnosing a",
+    "problem needs them. The patter goes AROUND them.",
+    "",
+    "WRITING A LINE",
+    "  text     the line. {braces} are filled in by the caller.",
+    "  variants optional list; one is picked at random each time. Use for",
+    "           anything said often — a station that says the identical thing",
+    "           forty times an evening stops sounding like a station.",
+    "           ALL variants of a line must use the SAME {placeholders}, so",
+    "           which one gets picked can never change what the caller has to",
+    "           supply. There's a test for this.",
+    "",
+    "Any {placeholder} must match what the call site passes. A missing one",
+    "won't crash — see src/dialogue.py — but it will print the raw brace, so",
+    "check the key in the code before renaming one.",
+    "",
+    "Read by src/dialogue.py, bundled into the build by the .spec file."
+  ],
+  "speakers": {
+    "shen": {
+      "name": "SHEN",
+      "role": "monitoring the frequency — knows you're listening"
+    },
+    "jax": {
+      "name": "JAX",
+      "role": "on the decks — does not know you exist"
+    },
+    "silo": {
+      "name": "SILO",
+      "role": "on the wire — does not know you exist"
+    }
+  },
+  "lines": {
+    "boot.scanning": {
+      "speaker": "shen",
+      "text": "Cataloguing the music archive..."
+    },
+    "boot.archive_loaded": {
+      "speaker": "shen",
+      "text": "Archive loaded. {count} tracks standing by."
+    },
+    "boot.calibrating": {
+      "speaker": "shen",
+      "text": "Warming up the receiver, Commander."
+    },
+    "boot.patching_in": {
+      "speaker": "shen",
+      "text": "Patching into XCOM's comms relay..."
+    },
+    "boot.online": {
+      "speaker": "shen",
+      "text": "You're on their frequency, Commander. Try not to let Central hear it."
+    },
+    "engine.rescanning": {
+      "speaker": "shen",
+      "text": "Re-cataloguing the archive. Hold tight."
+    },
+    "engine.rescan_done": {
+      "speaker": "shen",
+      "text": "Rescan complete. Every track present and correct."
+    },
+    "update.staged": {
+      "speaker": "shen",
+      "text": "Update ready. Your current version is kept in {backup}. Restarting."
+    },
+    "update.backup_kept": {
+      "speaker": "shen",
+      "text": "Previous version kept: {what}. It's in a _previous_v folder beside the app, with a note inside on how to go back. Delete it whenever you want the space."
+    },
+    "update.half_applied": {
+      "speaker": "shen",
+      "text": "This install looks half-updated: the app says {running}, the build beside it says {recorded}. Re-run the update, or unzip a fresh copy over this folder."
+    },
+    "flag.missing": {
+      "speaker": "shen",
+      "text": "{flag} is MISSING from your Alternative Mod Launcher arguments!"
+    },
+    "flag.missing_detail": {
+      "speaker": "shen",
+      "text": "Music will play straight over your cinematics until it's back. Run setup and press the button, or add it under Options > Settings > Active arguments."
+    },
+    "flag.added": {
+      "speaker": "shen",
+      "text": "Added {flag} to the Alternative Mod Launcher's arguments."
+    },
+    "flag.already_set": {
+      "speaker": "shen",
+      "text": "Alternative Mod Launcher already has {flag}. Nothing to do."
+    },
+    "crash.something_broke": {
+      "speaker": "shen",
+      "text": "Something's broken in the broadcast: {error}"
+    },
+    "engine.switching": {
+      "speaker": "jax",
+      "variants": [
+        "Right — killing {old}, bringing up {new}. {count} in the crate.",
+        "That's {old} done. {new} next, and I've got {count} lined up.",
+        "SILO, cut {old}. We're going to {new}. {count} ready.",
+        "Off {old}, onto {new}. {count} tracks. Don't touch anything."
+      ]
+    },
+    "engine.now_playing": {
+      "speaker": "jax",
+      "text": "Spinning"
+    },
+    "engine.next_up": {
+      "speaker": "jax",
+      "variants": [
+        "Next up",
+        "Queued",
+        "After this",
+        "Rolling into"
+      ]
+    },
+    "engine.looping": {
+      "speaker": "jax",
+      "text": "Looping this one. Nobody complain"
+    },
+    "engine.resuming": {
+      "speaker": "jax",
+      "text": "Back on"
+    },
+    "engine.holding": {
+      "speaker": "jax",
+      "text": "We're already on {state}. Leave it."
+    },
+    "engine.game_has_it": {
+      "speaker": "jax",
+      "variants": [
+        "Nothing in {state}. Dead air — put the house tape on.",
+        "{state}'s empty. SILO, we've got nothing. Play literally anything.",
+        "No tape for {state}. Letting the old broadcast bleed through."
+      ]
+    },
+    "engine.standing_down": {
+      "speaker": "jax",
+      "text": "Faders down on {state}. Not our shift."
+    },
+    "engine.dead_air": {
+      "speaker": "jax",
+      "text": "Dead air. SILO. SILO. Is the aerial still on the roof."
+    },
+    "engine.stinger_done": {
+      "speaker": "jax",
+      "text": "And that's the sting on {state}. Beautiful. Nobody heard it."
+    },
+    "engine.radio_mix": {
+      "speaker": "jax",
+      "text": "Mixing {pools} — swapping between them so it doesn't get stale."
+    },
+    "radio.on": {
+      "speaker": "jax",
+      "text": "WE ARE LIVE. Anarchy FM, broadcasting from a van that is definitely on fire."
+    },
+    "radio.off": {
+      "speaker": "jax",
+      "text": "Off air. Back to the regular tapes."
+    },
+    "radio.restored": {
+      "speaker": "jax",
+      "text": "Picking up where we left off. Nobody noticed we stopped."
+    },
+    "boot.game_already_running": {
+      "speaker": "silo",
+      "text": "Signal's already up. We're broadcasting into something in progress. Bold."
+    },
+    "spotify.handoff": {
+      "speaker": "silo",
+      "text": "Patching {state} through to the streaming lot. Their tower, their problem."
+    },
+    "game.closed_pausing": {
+      "speaker": "silo",
+      "text": "Signal's dropped. Holding the broadcast. JAX, stop touching things."
+    },
+    "game.signed_off": {
+      "speaker": "silo",
+      "text": "Carrier's gone. Killing the transmitter before ADVENT triangulates us. Again."
+    },
+    "game.launching": {
+      "speaker": "silo",
+      "text": "Powering up {exe}..."
+    },
+    "game.launching_with_flag": {
+      "speaker": "silo",
+      "text": "Powering up {exe} with {args}. Aerial's aligned."
+    },
+    "update.checking": {
+      "speaker": "silo",
+      "text": "Sweeping the band for a newer signal — we're on {version}."
+    },
+    "update.up_to_date": {
+      "speaker": "silo",
+      "text": "Nothing newer out there. {version} is as good as it gets."
+    },
+    "update.available": {
+      "speaker": "silo",
+      "text": "Picking up a newer broadcast: {new}. We're running {current}."
+    },
+    "update.verified": {
+      "speaker": "silo",
+      "text": "Signal's clean — {count} files, version {version}. No jamming."
+    },
+    "boot.waiting_for_launch": {
+      "speaker": "silo",
+      "variants": [
+        "No carrier yet. We're just talking to ourselves out here. Hit the button when you're ready.",
+        "Transmitting into an empty band. Someone start the game, we're getting bored.",
+        "Nothing on the frequency yet. JAX, play something while we wait."
+      ]
+    }
+  }
+}

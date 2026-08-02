@@ -17,6 +17,7 @@ from playback import PlaybackController
 import decode
 from decode import load_audio
 import console
+import dialogue
 import mms_config
 import mms_packs
 
@@ -231,7 +232,7 @@ class XiPodEngine:
         if not self._root_folder or not self._game_log_path:
             console.warn("Can't rescan — library was never loaded.")
             return
-        console.shen("Rescanning the music archive, Commander...")
+        dialogue.say("engine.rescanning")
         saved_top = self.current_top
 
         self.library.load(self._root_folder, addons=self.addons)
@@ -244,7 +245,7 @@ class XiPodEngine:
         if saved_top:
             self.current_top = None
             self.switch_state(saved_top)
-        console.shen("Rescan complete. All tracks accounted for.")
+        dialogue.say("engine.rescan_done")
 
     def _get_ini_path(self, log_path):
         base_dir = os.path.dirname(os.path.dirname(log_path))
@@ -374,7 +375,7 @@ class XiPodEngine:
         # state never asked for.
         self._radio_mode = False
 
-        console.shen(f"Silent override for {top} — game music has the conn.")
+        dialogue.say("engine.standing_down", state=top)
         silence = AudioSegment.silent(duration=SILENT_DURATION_MS, frame_rate=44100)
         self.playback.start(silence, on_track_finished=self._advance_track, get_volume=self._get_effective_volume)
 
@@ -405,7 +406,7 @@ class XiPodEngine:
                     self.current_top = top
                     self._spotify_active = True
                     self._spotify_paused = False
-                    console.shen(f"Spotify has {top} — handing off the airwaves.")
+                    dialogue.say("spotify.handoff", state=top)
                     self.spotify.play_context_async(uri)
                 return
             # Leaving a Spotify-scored state for one without a playlist (or
@@ -473,7 +474,7 @@ class XiPodEngine:
         self._radio_mode = radio_mode
         console.debug(f"switch_state({top}) radio={radio_mode} loop={use_loop} tracks={len(playlist)}")
         if not playlist:
-            console.shen(f"No custom tracks for {top}. Game music has the conn.")
+            dialogue.say("engine.game_has_it", state=top)
             self.pause()
             # Drop the outgoing state's tracks. Leaving them in place meant
             # active_playlist stayed stale, so Next/Prev would start playing
@@ -503,7 +504,7 @@ class XiPodEngine:
 
         old_desc = self.current_top or "None"
         console.divider()
-        console.shen(f"Switching frequencies: {old_desc} -> {top} ({len(playlist)} tracks)")
+        dialogue.say("engine.switching", old=old_desc, new=top, count=len(playlist))
 
         # Capture outgoing tail for crossfade BEFORE stopping
         outgoing_tail = self.playback.capture_outgoing_tail(self.crossfade_ms)
@@ -563,7 +564,7 @@ class XiPodEngine:
             return
 
         track = self.active_playlist[0]
-        console.track("Now playing", track['name'])
+        console.track(dialogue.line("engine.now_playing"), track['name'])
 
         try:
             incoming = self._prepare_segment(track, random_start=self._radio_mode,
@@ -635,7 +636,7 @@ class XiPodEngine:
             self.current_top = None
             self.switch_state(saved)
         else:
-            console.shen("Nothing to play — waiting for a state command from XCOM.")
+            dialogue.say("engine.dead_air")
 
     def _load_and_play_entry(self, generation, entry):
         """Background worker for play-by-track-id."""
@@ -764,7 +765,7 @@ class XiPodEngine:
 
         # Stinger states (victory/defeat) play once then stop
         if self.current_top in STINGER_STATES:
-            console.shen(f"Stinger complete ({self.current_top}). Standing by for orders.")
+            dialogue.say("engine.stinger_done", state=self.current_top)
             return
 
         # If loop is ON for this state, replay the same track
@@ -797,7 +798,7 @@ class XiPodEngine:
 
             self.active_index = next_idx
             track = self.active_playlist[self.active_index]
-            console.track("Next up", track['name'])
+            console.track(dialogue.line("engine.next_up"), track['name'])
 
             try:
                 # Radio mode: always random start. Non-radio: never on auto-advance.

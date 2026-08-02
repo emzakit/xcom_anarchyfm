@@ -77,6 +77,21 @@ def watched_names(game_exe):
     return names
 
 
+def launch_args(game_exe):
+    """Extra command-line arguments to start `game_exe` with.
+
+    When we launch XCOM's own exe we can simply pass `-forcelogflush`
+    ourselves, and the single most-skipped setup step stops mattering for
+    anyone who starts the game from this app.
+
+    Nothing is added for a mod launcher. AML keeps its own argument list and
+    passes that to the game; ours would be an argument to the LAUNCHER, which
+    at best does nothing. See launcher.add_forcelogflush for that route.
+    """
+    import launcher
+    return [launcher.FLAG] if launcher.is_game_exe(game_exe) else []
+
+
 def launch_game(cfg):
     """Start the configured game/launcher exe, unless it's already running
     (or the path is missing). Fire-and-forget; failures just warn."""
@@ -89,10 +104,15 @@ def launch_game(cfg):
     if is_running(exe_name, default=True):
         console.shen(f"{exe_name} is already running. Standing by.")
         return
-    console.shen(f"Launching {exe_name}...")
+
+    args = launch_args(game_exe)
+    if args:
+        console.shen(f"Launching {exe_name} with {' '.join(args)}...")
+    else:
+        console.shen(f"Launching {exe_name}...")
     try:
         subprocess.Popen(
-            [game_exe], cwd=os.path.dirname(game_exe),
+            [game_exe] + args, cwd=os.path.dirname(game_exe),
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
     except Exception as e:

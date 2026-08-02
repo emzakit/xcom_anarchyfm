@@ -5,6 +5,7 @@ Run from the project root:
 """
 
 import os
+import subprocess
 import sys
 import json
 import time
@@ -17,6 +18,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 import zipfile
 
 import build_manifest
+import dialogue
+import launcher
 import mms_config
 import process_utils
 import updater
@@ -26,6 +29,7 @@ from library import (
     MusicLibrary, interleave_pools,
     RADIO_SOURCE_RADIO, RADIO_SOURCE_STATE, RADIO_SOURCE_BOTH,
 )
+import setup as setup_mod
 from setup import STATE_FOLDERS
 import addons
 
@@ -239,6 +243,368 @@ class TestUpdaterStaging(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             zp = self._zip_build(tmp, {"AnarchyRadioFM.exe": "exe"})
             self.assertTrue(os.path.isdir(updater.stage(zp)))
+
+
+class TestBackupOnUpdate(unittest.TestCase):
+    """Updates move the running version into a version-stamped backup folder
+    rather than overwriting it. Windows allows renaming a running exe; it does
+    not allow overwriting one, and every attempt to do so failed silently."""
+
+    def test_backup_folder_is_version_stamped(self):
+        self.assertEqual(updater.backup_dir_name("2.2.0"), "_previous_v2.2.0")
+        self.assertTrue(
+            updater.backup_dir_name("").startswith(updater.BACKUP_PREFIX))
+
+    def test_finds_versioned_and_legacy_exe_names(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            open(os.path.join(tmp, "AnarchyRadioFM.exe"), "w").close()
+            self.assertTrue(
+                updater.find_app_exe(tmp).endswith("AnarchyRadioFM.exe"))
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(updater.find_app_exe(tmp), "")
+
+    def test_backups_are_found_and_measured(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bak = os.path.join(tmp, updater.backup_dir_name("2.2.0"))
+            os.makedirs(os.path.join(bak, "_internal"))
+            with open(os.path.join(bak, "AnarchyRadioFM.exe"), "w") as f:
+                f.write("x" * 100)
+            found = updater.find_backups(tmp)
+            self.assertEqual(len(found), 1)
+            self.assertEqual(found[0]["version"], "2.2.0")
+            self.assertEqual(found[0]["bytes"], 100)
+            self.assertIn("2.2.0", updater.describe_backups(tmp))
+
+    def test_no_backup_is_reported_when_there_is_none(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(updater.find_backups(tmp), [])
+            self.assertEqual(updater.describe_backups(tmp), "")
+
+    def test_ordinary_folders_are_not_mistaken_for_backups(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for name in ("_internal", "music", "previous", "backup"):
+                os.makedirs(os.path.join(tmp, name))
+            self.assertEqual(updater.find_backups(tmp), [])
+
+    def test_backup_can_be_removed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bak = os.path.join(tmp, updater.backup_dir_name("2.2.0"))
+            os.makedirs(os.path.join(bak, "_internal"))
+            open(os.path.join(bak, "_internal", "a.pyd"), "w").close()
+            ok, message = updater.remove_backup(bak)
+            self.assertTrue(ok, message)
+            self.assertFalse(os.path.isdir(bak))
+
+
+class TestUpdateTestHarness(unittest.TestCase):
+    """update_test.py drives the real updater, so it breaks silently whenever
+    the updater's API changes — it isn't imported by the app and nothing else
+    covers it. It called a function that had been deleted for a full release
+    cycle before anyone ran it."""
+
+    def _source(self):
+        path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "update_test.py")
+        self.assertTrue(os.path.isfile(path), "update_test.py is missing")
+        with open(path, encoding="utf-8") as f:
+            return f.read()
+
+    def test_every_updater_call_it_makes_exists(self):
+        import re
+        used = sorted(set(re.findall(r"\bupdater\.([A-Za-z_][A-Za-z0-9_]*)",
+                                     self._source())))
+        self.assertTrue(used, "found no updater calls — did the file move?")
+        missing = [name for name in used if not hasattr(updater, name)]
+        self.assertEqual(missing, [], f"update_test.py calls {missing}")
+
+    def test_every_build_manifest_call_it_makes_exists(self):
+        import re
+        used = sorted(set(re.findall(
+            r"\bbuild_manifest\.([A-Za-z_][A-Za-z0-9_]*)", self._source())))
+        missing = [n for n in used if not hasattr(build_manifest, n)]
+        self.assertEqual(missing, [], f"update_test.py calls {missing}")
+
+    def test_it_still_parses(self):
+        compile(self._source(), "update_test.py", "exec")
+
+
+class TestLauncherForceLogFlush(unittest.TestCase):
+    """Editing someone else's launcher config. Backup first, append only,
+    never touch what's already there."""
+
+    def _aml(self, tmp, args, extra=None):
+        exe = os.path.join(tmp, "XCOM2 Launcher.exe")
+        open(exe, "w").close()
+        data = {"ArgumentList": list(args), "Mods": {"Entries": {}},
+                "GamePath": r"C:\Games\XCOM 2"}
+        data.update(extra or {})
+        # AML writes UTF-8 with a BOM; so must we.
+        with open(os.path.join(tmp, "settings.json"), "w",
+                  encoding="utf-8-sig") as f:
+            json.dump(data, f, indent=2)
+        return exe
+
+    def test_recognises_aml_and_reports_missing_flag(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            exe = self._aml(tmp, ["-review", "-log"])
+            info = launcher.status(exe)
+            self.assertTrue(info["is_aml"])
+            self.assertFalse(info["has_flag"])
+            self.assertEqual(info["args"], ["-review", "-log"])
+
+    def test_detects_flag_already_present(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            exe = self._aml(tmp, ["-review", "-forcelogflush"])
+            self.assertTrue(launcher.status(exe)["has_flag"])
+
+    def test_a_settings_json_that_isnt_amls_is_ignored(self):
+        """The exe is called "XCOM2 Launcher.exe", which is exactly what
+        someone would name a shortcut or a wrapper script."""
+        with tempfile.TemporaryDirectory() as tmp:
+            exe = os.path.join(tmp, "XCOM2 Launcher.exe")
+            open(exe, "w").close()
+            with open(os.path.join(tmp, "settings.json"), "w") as f:
+                json.dump({"something": "else"}, f)
+            self.assertFalse(launcher.status(exe)["is_aml"])
+
+    def test_plain_exe_with_no_settings_is_not_aml(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            exe = os.path.join(tmp, "XCom2.exe")
+            open(exe, "w").close()
+            self.assertFalse(launcher.status(exe)["is_aml"])
+            self.assertFalse(launcher.status("")["is_aml"])
+
+    def test_appends_without_disturbing_existing_arguments(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            original = ["-review", "-noStartUpMovies", "-allowConsole", "-log"]
+            exe = self._aml(tmp, original, extra={"CheckForUpdates": True})
+            ok, _msg, saved = launcher.add_forcelogflush(exe)
+            self.assertTrue(ok)
+
+            with open(os.path.join(tmp, "settings.json"),
+                      encoding="utf-8-sig") as f:
+                data = json.load(f)
+            # Original args, same order, plus ours on the end.
+            self.assertEqual(data["ArgumentList"], original + ["-forcelogflush"])
+            # Everything else in the file survives untouched.
+            self.assertEqual(data["CheckForUpdates"], True)
+            self.assertEqual(data["GamePath"], r"C:\Games\XCOM 2")
+            self.assertIn("Mods", data)
+
+    def test_backup_is_written_before_the_edit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            exe = self._aml(tmp, ["-review"])
+            ok, _msg, saved = launcher.add_forcelogflush(exe)
+            self.assertTrue(ok)
+            self.assertTrue(os.path.isfile(saved), saved)
+            self.assertTrue(os.path.basename(saved).startswith("settings_"))
+            self.assertTrue(saved.endswith(".bkp"))
+            # The backup holds the PRE-edit content, so it can undo the change.
+            with open(saved, encoding="utf-8-sig") as f:
+                self.assertEqual(json.load(f)["ArgumentList"], ["-review"])
+
+    def test_running_twice_does_not_double_the_flag(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            exe = self._aml(tmp, ["-review"])
+            launcher.add_forcelogflush(exe)
+            ok, message, saved = launcher.add_forcelogflush(exe)
+            self.assertTrue(ok)
+            self.assertIn("already", message.lower())
+            self.assertEqual(saved, "")      # nothing changed, nothing backed up
+            with open(os.path.join(tmp, "settings.json"),
+                      encoding="utf-8-sig") as f:
+                args = json.load(f)["ArgumentList"]
+            self.assertEqual(args.count("-forcelogflush"), 1)
+
+    def test_backups_never_overwrite_each_other(self):
+        """Two runs on the same day must not clobber the pristine original."""
+        with tempfile.TemporaryDirectory() as tmp:
+            exe = self._aml(tmp, ["-review"])
+            first = launcher.backup(os.path.join(tmp, "settings.json"))
+            second = launcher.backup(os.path.join(tmp, "settings.json"))
+            self.assertNotEqual(first, second)
+            self.assertTrue(os.path.isfile(first))
+            self.assertTrue(os.path.isfile(second))
+
+    def test_recognises_the_plain_game_exe(self):
+        """Running the game directly means no arguments field and no settings
+        file — a desktop shortcut is the only place a flag can live."""
+        self.assertTrue(launcher.is_game_exe(
+            r"C:\XCOM 2\Binaries\Win64\XCom2.exe"))
+        self.assertTrue(launcher.is_game_exe(
+            r"C:\XCOM 2\XCom2-WarOfTheChosen\Binaries\Win64\XCom2.exe"))
+        self.assertFalse(launcher.is_game_exe(r"C:\x\XCOM2 Launcher.exe"))
+        self.assertFalse(launcher.is_game_exe(""))
+
+    def test_launch_check_only_complains_when_it_should(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            exe = self._aml(tmp, ["-review", "-forcelogflush"])
+            self.assertTrue(launcher.warn_if_flag_missing(exe))
+        with tempfile.TemporaryDirectory() as tmp:
+            exe = self._aml(tmp, ["-review"])
+            self.assertFalse(launcher.warn_if_flag_missing(exe))
+        # Nothing we can inspect: stay quiet rather than cry wolf.
+        self.assertTrue(launcher.warn_if_flag_missing(r"C:\x\XCom2.exe"))
+        self.assertTrue(launcher.warn_if_flag_missing(""))
+
+    def test_refuses_when_it_is_not_aml(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            exe = os.path.join(tmp, "XCom2.exe")
+            open(exe, "w").close()
+            ok, message, saved = launcher.add_forcelogflush(exe)
+            self.assertFalse(ok)
+            self.assertEqual(saved, "")
+            self.assertIn("Alternative Mod Launcher", message)
+
+
+class TestGuiImports(unittest.TestCase):
+    """The GUI isn't imported by anything else in this suite, so a syntax
+    error in it passed every test and only showed up when the app was run —
+    which, in a windowless build, means it showed up as nothing at all.
+
+    Compiling every module is cheap and catches that class outright. Actually
+    constructing the widgets needs Qt, so it's skipped where that isn't
+    available rather than failing."""
+
+    def _gui_sources(self):
+        src = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src")
+        found = []
+        for root, _dirs, files in os.walk(src):
+            if "__pycache__" in root:
+                continue
+            for name in files:
+                if name.endswith(".py"):
+                    found.append(os.path.join(root, name))
+        return found
+
+    def test_every_source_file_compiles(self):
+        bad = []
+        for path in self._gui_sources():
+            with open(path, encoding="utf-8") as f:
+                try:
+                    compile(f.read(), path, "exec")
+                except SyntaxError as e:
+                    bad.append(f"{os.path.basename(path)}:{e.lineno}: {e.msg}")
+        self.assertEqual(bad, [], "syntax errors: " + "; ".join(bad))
+
+    def test_the_main_window_and_dialogs_can_be_built(self):
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        try:
+            from PySide6.QtWidgets import QApplication
+        except Exception:                       # pragma: no cover
+            self.skipTest("PySide6 not available")
+
+        app = QApplication.instance() or QApplication([])
+        import audio_engine
+        from gui.effects import EffectsDialog
+        from gui.options import OptionsDialog
+        from gui.addons_dialog import AddonsDialog
+
+        engine = audio_engine.XiPodEngine()
+        cfg = {"music_folder": "", "game_exe": "", "crossfade_ms": 2500,
+               "radio_chunk_minutes": 10, "default_volume": 0.8}
+        for build in (lambda: OptionsDialog(cfg, engine=engine),
+                      lambda: EffectsDialog(engine),
+                      lambda: AddonsDialog(engine, "xipod_config.json")):
+            widget = build()
+            self.assertIsNotNone(widget)
+        app.processEvents()
+
+
+class TestDialogue(unittest.TestCase):
+    """Every user-facing line lives in helpers/dialogue.json. It's flavour
+    text, so nothing in here may ever take the app down."""
+
+    def test_the_file_loads_and_has_lines(self):
+        self.assertGreater(len(dialogue._DATA["lines"]), 0)
+        self.assertEqual(sorted(dialogue._DATA["speakers"]),
+                         ["jax", "shen", "silo"])
+
+    def test_every_line_has_a_known_speaker_and_something_to_say(self):
+        for key, entry in dialogue._DATA["lines"].items():
+            speaker = entry.get("speaker")
+            self.assertIn(speaker, dialogue._DATA["speakers"], f"{key}: {speaker}")
+            self.assertTrue(entry.get("text") or entry.get("variants"),
+                            f"{key} has no text and no variants")
+            for variant in entry.get("variants") or []:
+                self.assertTrue(variant.strip(), f"{key} has a blank variant")
+
+    def test_variants_of_a_line_use_the_same_placeholders(self):
+        """Otherwise a line works until the day it picks the other variant."""
+        import string
+        for key, entry in dialogue._DATA["lines"].items():
+            variants = entry.get("variants")
+            if not variants or len(variants) < 2:
+                continue
+            fields = [
+                {f for _, f, _, _ in string.Formatter().parse(v) if f}
+                for v in variants
+            ]
+            self.assertEqual(len(set(map(frozenset, fields))), 1,
+                             f"{key}: variants disagree on placeholders {fields}")
+
+    def test_every_key_used_in_code_exists(self):
+        """A renamed key would otherwise print '[some.key]' to a real user,
+        and nothing would fail until someone saw it happen."""
+        import re
+        src_dir = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src")
+        used = set()
+        for root, _dirs, files in os.walk(src_dir):
+            if "__pycache__" in root:
+                continue
+            for name in files:
+                if not name.endswith(".py"):
+                    continue
+                with open(os.path.join(root, name), encoding="utf-8") as f:
+                    body = f.read()
+                used |= set(re.findall(
+                    r'dialogue\.(?:say|line|alert)\(\s*["\']([^"\']+)["\']', body))
+        self.assertTrue(used, "found no dialogue calls — did the API change?")
+        missing = sorted(k for k in used if k not in dialogue._DATA["lines"])
+        self.assertEqual(missing, [], f"code uses missing dialogue keys: {missing}")
+
+    def test_nothing_here_can_crash_the_app(self):
+        self.assertEqual(dialogue.line("no.such.key"), "[no.such.key]")
+        # A placeholder the caller didn't supply falls back to the template.
+        self.assertIn("{", dialogue.line("engine.switching"))
+        # An extra keyword nobody asked for is simply ignored.
+        self.assertTrue(dialogue.line("boot.online", pointless="value"))
+        self.assertIn(dialogue.speaker_of("no.such.key"),
+                      dialogue._DATA["speakers"])
+
+
+class TestLogFolder(unittest.TestCase):
+    """Setup asks for the Logs folder, not Launch.log — the file doesn't exist
+    until the game has been run once."""
+
+    def test_folder_becomes_the_log_file(self):
+        self.assertEqual(
+            setup_mod.log_path_from_folder(r"C:\X\XComGame\Logs"),
+            os.path.join(r"C:\X\XComGame\Logs", "Launch.log"))
+
+    def test_a_log_file_passes_straight_through(self):
+        """Existing configs stored the full path; they must keep working."""
+        path = r"C:\X\XComGame\Logs\Launch.log"
+        self.assertEqual(setup_mod.log_path_from_folder(path), path)
+
+    def test_blank_stays_blank(self):
+        self.assertEqual(setup_mod.log_path_from_folder(""), "")
+
+    def test_candidates_cover_wotc_vanilla_and_onedrive(self):
+        joined = " | ".join(setup_mod.log_folder_candidates()).lower()
+        self.assertIn("xcom2 war of the chosen", joined)
+        self.assertIn("onedrive", joined)
+        # Vanilla, without matching the WotC folder that starts the same way.
+        self.assertTrue(any(
+            c.lower().endswith(os.path.join(
+                "my games", "xcom2", "xcomgame", "logs"))
+            for c in setup_mod.log_folder_candidates()))
+        # WotC first: it's what the mod supports.
+        self.assertIn("war of the chosen",
+                      setup_mod.log_folder_candidates()[0].lower())
 
 
 class TestLoopResolution(unittest.TestCase):

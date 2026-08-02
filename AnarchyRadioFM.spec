@@ -30,6 +30,10 @@ a = Analysis(
         # deliberately: no states means no folders, no music and no silencing,
         # which is a far worse thing to debug than a clear error at launch.
         ("helpers/state_folders.json", "helpers"),
+        # Everything the station says. Editable without touching code — see
+        # src/dialogue.py. Missing it degrades to printing keys rather than
+        # crashing, so it warns instead of raising.
+        ("helpers/dialogue.json", "helpers"),
         ("assets/banner.png", "assets"),
         # Checkbox tick — referenced by url() from the stylesheet, so it has
         # to exist on disk at runtime rather than being imported.
@@ -147,6 +151,32 @@ def _version_resource():
 _VERSION_FILE = _version_resource()
 
 
+def _app_version():
+    import re
+    src = open(os.path.join("src", "version.py"), encoding="utf-8").read()
+    return re.search(r'__version__\s*=\s*"([^"]+)"', src).group(1)
+
+
+# The FOLDER carries the version; the exe inside it does not:
+#
+#   AnarchyRadioFM_APP_v2.4.2/AnarchyRadioFM.exe
+#
+# The versioned folder is what makes updating safe. Windows won't let a running
+# exe be overwritten, so the old updater had to wait for the app to die and
+# then copy over the top of it — and when that went wrong it went wrong
+# silently, leaving a half-swapped install. Installing into a NEW folder means
+# nothing is ever overwritten while it's running; the old folder is deleted
+# afterwards, with the user's say-so.
+#
+# The exe name stays fixed on purpose. Every released updater goes looking for
+# "AnarchyRadioFM.exe" inside the zip, so versioning the exe too would have
+# meant nobody on an existing version could update to this one — a one-time
+# manual download for every user, to buy nothing. The folder alone carries all
+# the benefit.
+_FOLDER_NAME = f"AnarchyRadioFM_APP_v{_app_version()}"
+_EXE_NAME = "AnarchyRadioFM"
+
+
 pyz = PYZ(a.pure)
 
 exe = EXE(
@@ -154,7 +184,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="AnarchyRadioFM",
+    name=_EXE_NAME,
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -170,5 +200,5 @@ coll = COLLECT(
     a.datas,
     strip=False,
     upx=False,
-    name="AnarchyRadioFM",
+    name=_FOLDER_NAME,
 )

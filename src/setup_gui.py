@@ -9,16 +9,22 @@ from PySide6.QtWidgets import (
     QLabel, QPushButton, QLineEdit, QFileDialog,
     QFrame, QMessageBox, QSizePolicy, QSpinBox, QScrollArea,
 )
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QFont, QPixmap
 
 from setup import (
     config_exists, load_config, save_config,
     _create_state_folders, _find_game_config_folder,
     find_log_path_silent, find_workshop_folder,
+    log_folder_candidates, log_path_from_folder,
     default_music_folder, default_addon_test_folder, create_addon_test_folder,
 )
+import console
+import launcher
 import mms_packs
+
+# Kept in step with gui/main_window.py, which offers the same link.
+AML_RELEASES_URL = "https://github.com/X2CommunityCore/xcom2-launcher/releases"
 # Shared look & feel — one stylesheet for the whole app (see gui/theme.py).
 from gui.theme import STYLESHEET, FONT_FAMILY, PRIMARY, PRIMARY_DIM, AMBER
 from gui.helpers import paint_own_background
@@ -96,12 +102,71 @@ class SetupWindow(QWidget):
         scroll.setWidget(steps)
         root.addWidget(scroll, 1)
 
+        # --- The one step nobody can skip -------------------------------- #
+        # Moved to the very top from the bottom of the form. It's the single
+        # most important thing on this window and it was the last thing anyone
+        # read, if they read it at all. Without the flag, music talks over
+        # every cinematic — which is the loudest, most obvious way this app can
+        # appear broken.
+        #
+        # (It replaced "turn XCOM's Music volume down to 0", the old workaround
+        # for the game's soundtrack bleeding through. That's fixed properly
+        # now, and muting the game also silences MMS and any music packs, so
+        # the old advice actively costs people music.)
+        flush_warn = QLabel(
+            "⚠   BEFORE YOU PLAY\n\n"
+            "XCOM 2 needs  -forcelogflush  in its launch options, or music "
+            "plays straight over your cinematics.\n\n"
+            "★  Recommended:  use the Alternative Mod Launcher. It keeps its "
+            "own argument list, so this gets set once and stays set — and I "
+            "can check it for you on every launch.\n\n"
+            "Otherwise:  Steam → right-click XCOM 2 → Properties → Launch "
+            "Options. Or pick XCOM's own exe below and I'll pass the flag "
+            "myself whenever you launch from here."
+        )
+        flush_warn.setWordWrap(True)
+        flush_warn.setFont(QFont(FONT_FAMILY, 10))
+        flush_warn.setStyleSheet(
+            f"color: {AMBER}; border: 1px solid {AMBER}; "
+            "border-radius: 3px; padding: 12px;")
+        form.addWidget(flush_warn)
+        form.addSpacing(10)
+
+        aml_row = QHBoxLayout()
+        aml_row.setSpacing(8)
+        get_aml = QPushButton("Get the Alternative Mod Launcher")
+        get_aml.setCursor(Qt.PointingHandCursor)
+        get_aml.setToolTip(AML_RELEASES_URL)
+        get_aml.clicked.connect(self._on_get_aml)
+        aml_row.addWidget(get_aml)
+        aml_row.addStretch()
+        form.addLayout(aml_row)
+        form.addSpacing(18)
+
         # --- 1. Game Executable ---
         form.addWidget(self._section_label(
             "Step 1 — Game Launcher",
             "Pick your game .exe or mod manager (Alternative Mod Launcher, etc.)."
         ))
         self.exe_field = self._path_row(form, "Browse...", self._browse_exe)
+
+        # Offered as a button rather than sprung as a dialog. It edits somebody
+        # else's launcher config, and a modal that appears unbidden the moment
+        # setup opens is exactly the sort of thing people click through without
+        # reading. A button waits to be asked.
+        self.flush_btn = QPushButton(f"Add {launcher.FLAG} to AML")
+        self.flush_btn.setCursor(Qt.PointingHandCursor)
+        self.flush_btn.clicked.connect(self._on_add_forcelogflush)
+        self.flush_btn.setVisible(False)
+        form.addWidget(self.flush_btn)
+
+        self.flush_note = QLabel("")
+        self.flush_note.setWordWrap(True)
+        self.flush_note.setFont(QFont(FONT_FAMILY, 9))
+        self.flush_note.setStyleSheet(f"color: {PRIMARY_DIM};")
+        self.flush_note.setVisible(False)
+        form.addWidget(self.flush_note)
+
         form.addSpacing(14)
 
         # --- 2. Music Folder ---
@@ -165,23 +230,6 @@ class SetupWindow(QWidget):
         form.addLayout(chunk_row)
         form.addSpacing(12)
 
-        # --- Launch option warning ---
-        # This replaced "turn XCOM's Music volume down to 0", which was the
-        # workaround for the game's soundtrack playing underneath everything.
-        # That's fixed properly now, and muting the game also silences MMS and
-        # any music packs — so the old advice actively costs people music.
-        music_warn = QLabel(
-            "One last thing, and it isn't optional: add  -forcelogflush  to "
-            "XCOM 2's launch options. In Steam, right-click XCOM 2 → "
-            "Properties → Launch Options. Using a mod launcher? Put it in that "
-            "launcher's arguments field. Without it, music plays over your "
-            "cinematics."
-        )
-        music_warn.setWordWrap(True)
-        music_warn.setFont(QFont(FONT_FAMILY, 10))
-        music_warn.setStyleSheet(f"color: {AMBER};")
-        form.addWidget(music_warn)
-        form.addSpacing(12)
         # Keeps the steps packed at the top of the scroll body.
         form.addStretch()
 
@@ -228,6 +276,11 @@ class SetupWindow(QWidget):
 
         self._autofill_from_exe()
 
+        # On open as well as on browse. Anyone with an existing config never
+        # touches the Browse button, so a browse-only check missed exactly the
+        # people most likely to have skipped the flag in the first place.
+        self._refresh_flush_button()
+
     def _autofill_from_exe(self):
         """Fill in every path the game exe lets us work out.
 
@@ -256,6 +309,15 @@ class SetupWindow(QWidget):
             auto_config = _find_game_config_folder()
             if auto_config:
                 self.config_field.setText(auto_config)
+
+        # Left BLANK until there's a game exe to derive it from. Without one
+        # there is no steamapps root, so the answer would be the folder beside
+        # the app — which is not where anyone's SDK builds land, and which
+        # looked for all the world like broken detection. An empty box that
+        # fills itself in the moment you pick the launcher is honest; a
+        # confidently wrong path is not.
+        if not exe:
+            return
 
         # Prefers ModBuddy's output folder, so a freshly built pack is testable
         # without copying it anywhere. Replaced only when it's empty or still
@@ -340,202 +402,105 @@ class SetupWindow(QWidget):
             # becomes knowable — before it, there's no steamapps root to find
             # the workshop folder or the SDK from.
             self._autofill_from_exe()
+            self._refresh_flush_button()
 
-    def _browse_music(self, field):
-        path = QFileDialog.getExistingDirectory(self, "Select Music Library Folder")
-        if path:
-            field.setText(os.path.normpath(path))
+    def _refresh_flush_button(self):
+        """Show the -forcelogflush button only when it has something to do.
 
-    def _browse_workshop(self, field):
-        path = QFileDialog.getExistingDirectory(self, "Select Workshop Folder")
-        if path:
-            field.setText(os.path.normpath(path))
+        `-forcelogflush` is the step people skip, and skipping it is why music
+        talks over cinematics: the app reads the game's log, and without the
+        flag XCOM buffers it so hard that "a cinematic started" can land 27
+        seconds late. AML keeps its arguments in a settings.json we can read,
+        so nobody needs to edit it by hand.
 
-    def _browse_addon_test(self, field):
-        path = QFileDialog.getExistingDirectory(self, "Select Addon Testing Folder")
-        if path:
-            field.setText(os.path.normpath(path))
+        Three states, and the button says which: not AML (hidden), already set
+        (shown, disabled, so "it checked and you're fine" doesn't look like
+        "it never checked"), or missing (offered).
+        """
+        exe = self.exe_field.text().strip()
+        try:
+            info = launcher.status(exe) if exe else {"is_aml": False}
+        except Exception as e:
+            console.debug(f"Launcher check failed: {e}")
+            info = {"is_aml": False}
 
-    def _browse_config(self, field):
-        path = QFileDialog.getExistingDirectory(self, "Select Game Config Folder")
-        if path:
-            field.setText(os.path.normpath(path))
-
-    def _open_music_folder(self):
-        path = self.music_field.text().strip()
-        if path and os.path.isdir(path):
-            subprocess.Popen(["explorer", os.path.normpath(path)])
-        else:
-            self._flash("SHEN:  Pick a music folder first, Commander.")
-
-    # ------------------------------------------------------------ #
-    #  Launch / Validate
-    # ------------------------------------------------------------ #
-
-    def _on_launch(self):
-        game_exe = self.exe_field.text().strip()
-        music_folder = self.music_field.text().strip()
-        workshop_folder = self.workshop_field.text().strip()
-        game_config_folder = self.config_field.text().strip()
-        addon_test_folder = self.addon_test_field.text().strip()
-
-        # Validate required fields
-        if not game_exe:
-            self._flash("SHEN:  I need a game executable, Commander.")
-            return
-        if not os.path.isfile(game_exe):
-            self._flash(f"SHEN:  Can't find that file:  {game_exe}")
-            return
-        if not music_folder:
-            self._flash("SHEN:  I need a music library folder, Commander.")
+        if info["is_aml"]:
+            self.flush_btn.setVisible(True)
+            self.flush_note.setVisible(True)
+            if info["has_flag"]:
+                self.flush_btn.setEnabled(False)
+                self.flush_btn.setText(f"{launcher.FLAG} is already set")
+                self.flush_note.setText(
+                    "Alternative Mod Launcher detected, and it already has the "
+                    "flag. Nothing to do here — you're set.")
+            else:
+                self.flush_btn.setEnabled(True)
+                self.flush_btn.setText(f"Add {launcher.FLAG} to AML")
+                self.flush_note.setText(
+                    "Alternative Mod Launcher detected, and it's MISSING "
+                    f"{launcher.FLAG}. This adds it to the end of your argument "
+                    "list, changes nothing else, and backs up settings.json "
+                    "first. Ignore this if you'd rather do it yourself.")
             return
 
-        # Create music folder if needed
-        if not os.path.isdir(music_folder):
-            try:
-                os.makedirs(music_folder)
-            except Exception as e:
-                self._flash(f"SHEN:  Couldn't create folder:  {e}")
-                return
-
-        # Create state subfolders
-        _create_state_folders(music_folder)
-
-        # Optional, so an empty box just means "not a pack author" — but if a
-        # path is set, make it real and drop the explainer in it.
-        if addon_test_folder:
-            create_addon_test_folder(addon_test_folder)
-
-        # Validate workshop. Required: it's how we reach the installed mod's
-        # own Config folder, which is the only place MMS reads our silencing
-        # from. Get this wrong and everything appears to work while the game's
-        # music plays straight over the top.
-        if not workshop_folder:
-            workshop_folder = find_workshop_folder(game_exe)
-            if workshop_folder:
-                self.workshop_field.setText(os.path.normpath(workshop_folder))
-
-        if not workshop_folder:
-            self._flash("SHEN:  I need the Workshop folder — it's how I find the "
-                        "installed mod. Without it the game's music won't be silenced.")
-            return
-        if not os.path.isdir(workshop_folder):
-            self._flash(f"SHEN:  Workshop folder not found:  {workshop_folder}")
+        if launcher.is_game_exe(exe):
+            # Nothing to offer here any more. There's no arguments field to
+            # edit and no settings file to patch — but there's also nothing to
+            # fix, because the app passes the flag itself when you launch the
+            # game from its panel. A note, not a button.
+            self.flush_btn.setVisible(False)
+            self.flush_note.setVisible(True)
+            self.flush_note.setText(
+                f"That's XCOM's own exe, so I'll pass {launcher.FLAG} myself "
+                "whenever you use the Launch Game button. Starting the game "
+                "from Steam or a desktop icon instead? Then set it in Steam's "
+                "Launch Options, or use the Alternative Mod Launcher above — "
+                "it's the tidiest answer.")
             return
 
-        # The folder existing isn't the point — reaching our own mod through
-        # it is. Warn rather than block: a first-time setup can legitimately
-        # run before the mod has finished downloading.
-        if not mms_packs.find_own_config_dirs(workshop_folder):
-            self._flash("SHEN:  Found the folder, but not the Anarchy Radio FM mod "
-                        "inside it. Subscribe to the mod (or set mod_config_folder) "
-                        "or the game's music will play over yours.")
+        self.flush_btn.setVisible(False)
+        self.flush_note.setVisible(False)
 
-        # Find log path
-        log_path = find_log_path_silent()
+    def _on_add_forcelogflush(self):
+        """Confirm, then add the flag. Their launcher, their call — and
+        declinable by simply not pressing the button."""
+        exe = self.exe_field.text().strip()
+        info = launcher.status(exe)
+        if not info["is_aml"] or info["has_flag"]:
+            self._refresh_flush_button()
+            return
 
-        # Auto-detect config folder if not provided
-        if not game_config_folder:
-            game_config_folder = _find_game_config_folder(log_path) or ""
-        if not game_config_folder:
-            # Fall back to default
-            userprofile = os.environ.get("USERPROFILE", os.path.expanduser("~"))
-            game_config_folder = os.path.join(
-                userprofile, "Documents", "my games",
-                "XCOM2 War of the Chosen", "XComGame", "Config"
-            )
-
-        # Build config
-        cfg = {
-            "game_exe": game_exe,
-            "music_folder": music_folder,
-            "log_path": log_path,
-            "game_config_folder": game_config_folder,
-            "workshop_folder": workshop_folder,
-            "addon_test_folder": addon_test_folder,
-            "auto_close_with_game": True,
-            "default_volume": 0.8,
-            "shuffle": True,
-            "crossfade_ms": 2500,
-        }
-
-        # If log path wasn't auto-detected, prompt
-        if not log_path:
-            log_path = self._ask_log_path()
-            if not log_path:
-                return
-            cfg["log_path"] = log_path
-
-        save_config(cfg)
-
-        # Music addons aren't imported here any more — they're discovered and
-        # merged when the engine loads the library. See addons.py.
-        self.result_cfg = cfg
-        self.close()
-
-    def _explain_radio_length(self):
-        """The long version, on demand. It was inline once and dominated the
-        whole wizard — most people just want to accept the default."""
-        box = QMessageBox(self)
-        box.setWindowTitle("Radio Mode station length")
-        box.setIcon(QMessageBox.NoIcon)
-        box.setText("Why we're asking")
-        box.setInformativeText(
-            "Radio Mode tunes the Avenger to your STATE_RESISTANCE_RADIO folder "
-            "and starts every track at a random point, like catching a broadcast "
-            "that was already running.\n\n"
-            "People tend to fill that folder with hour-long station rips. Loading "
-            "a whole hour costs a few hundred MB of memory and leaves you staring "
-            "at silence for ten seconds before the first note.\n\n"
-            "So it loads a slice at a time. When the slice ends, it re-tunes to a "
-            "fresh random spot — which is what a radio station does anyway.\n\n"
-            "10 minutes gets you playing in about two seconds. Set it to 0 to "
-            "switch the limit off and play every track through to its end.\n\n"
-            "You can change this any time in Options."
-        )
-        box.setStyleSheet(self.styleSheet())
-        box.exec()
-
-    def _ask_log_path(self):
-        """Show a dialog to get the log path manually."""
         msg = QMessageBox(self)
-        msg.setWindowTitle("XCOM 2 Log File")
+        msg.setWindowTitle("Add -forcelogflush?")
         msg.setStyleSheet(STYLESHEET)
-        msg.setText(
-            "Couldn't auto-detect your XCOM 2 log file.\n\n"
-            "The log is created when XCOM 2 launches for the first time.\n"
-            "Launch the game once, then click Retry.\n\n"
-            "Or click Browse to find it manually:\n"
-            "%USERPROFILE%\\Documents\\my games\\"
-            "XCOM2 War of the Chosen\\XComGame\\Logs\\Launch.log"
-        )
-        retry_btn = msg.addButton("Retry Auto-Detect", QMessageBox.AcceptRole)
-        browse_btn = msg.addButton("Browse...", QMessageBox.ActionRole)
-        skip_btn = msg.addButton("Use Default Path", QMessageBox.RejectRole)
+        msg.setText(f"Add {launcher.FLAG} to the Alternative Mod Launcher?")
+        msg.setInformativeText(
+            "It goes on the end of your argument list. Nothing already in "
+            "there is changed or reordered, and settings.json is backed up "
+            "next to itself first so you can undo it.\n\n"
+            f"Now:\n  {' '.join(info['args']) or '(none)'}\n\n"
+            f"After:\n  {' '.join(info['args'] + [launcher.FLAG]).strip()}")
+        yes = msg.addButton("Add it", QMessageBox.AcceptRole)
+        msg.addButton("Cancel", QMessageBox.RejectRole)
         msg.exec()
 
-        clicked = msg.clickedButton()
-        if clicked == retry_btn:
-            path = find_log_path_silent()
-            if path:
-                return path
-            self._flash("SHEN:  Still not found. Launch XCOM 2 first.")
-            return self._ask_log_path()
-        elif clicked == browse_btn:
-            path, _ = QFileDialog.getOpenFileName(
-                self, "Select Launch.log", "",
-                "Log Files (*.log);;All Files (*.*)"
-            )
-            if path:
-                return os.path.normpath(path)
-            return self._ask_log_path()
-        else:
-            # Use default path even if it doesn't exist yet
-            userprofile = os.environ.get("USERPROFILE", os.path.expanduser("~"))
-            return os.path.join(
-                userprofile, "Documents", "my games",
-                "XCOM2 War of the Chosen", "XComGame", "Logs", "Launch.log"
-            )
+        if msg.clickedButton() is not yes:
+            self._flash("SHEN:  Left your launcher alone.")
+            return
+
+        ok, message, saved = launcher.add_forcelogflush(exe)
+        self._flash(("SHEN:  " if ok else "WARN:  ") + message)
+        if ok and saved:
+            console.shen(f"Launcher backup: {saved}")
+        self._refresh_flush_button()
+
+    def _on_get_aml(self):
+        """Open AML's releases page. Recommended, not required."""
+        import webbrowser
+        console.shen("Opening the Alternative Mod Launcher releases page.")
+        webbrowser.open(AML_RELEASES_URL)
+        self._flash("SHEN:  Grab the latest .zip, unpack it, then point Step 1 "
+                    "at XCOM2 Launcher.exe.")
 
     def _flash(self, msg):
         self.status.setText(msg)

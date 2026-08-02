@@ -213,20 +213,68 @@ def discover_addons(cfg):
 #  Path Helpers — auto-detection of the game's user folders
 # ------------------------------------------------------------------ #
 
-def find_log_path_silent():
-    """Auto-detect the XCOM 2 WotC Launch.log, or return "" if not found.
-    (The log is created the first time the game runs.)"""
+# The file inside the Logs folder that the app actually reads.
+LOG_FILE_NAME = "Launch.log"
+
+# Where XCOM keeps its logs, under the user's Documents. WotC first: it's what
+# almost everyone plays, and it's the only one the mod supports.
+_LOG_DIRS = [
+    os.path.join("my games", "XCOM2 War of the Chosen", "XComGame", "Logs"),
+    os.path.join("my games", "XCOM2", "XComGame", "Logs"),
+]
+
+# Documents is not always under USERPROFILE — OneDrive moves it, and does so on
+# a great many machines without asking.
+_DOC_ROOTS = ["Documents", os.path.join("OneDrive", "Documents")]
+
+
+def log_folder_candidates():
+    """Every plausible Logs folder, best guess first. Existence not checked."""
     userprofile = os.environ.get("USERPROFILE", os.path.expanduser("~"))
-    candidates = [
-        os.path.join(userprofile, "Documents", "my games",
-                     "XCOM2 War of the Chosen", "XComGame", "Logs", "Launch.log"),
-        os.path.join(userprofile, "OneDrive", "Documents", "my games",
-                     "XCOM2 War of the Chosen", "XComGame", "Logs", "Launch.log"),
-    ]
-    for c in candidates:
-        if os.path.exists(c):
-            return c
+    out = []
+    for docs in _DOC_ROOTS:
+        for rel in _LOG_DIRS:
+            out.append(os.path.join(userprofile, docs, rel))
+    return out
+
+
+def find_log_folder_silent():
+    """Auto-detect the XCOM 2 Logs FOLDER, or "" if none is there yet."""
+    for path in log_folder_candidates():
+        if os.path.isdir(path):
+            return path
     return ""
+
+
+def log_path_from_folder(folder):
+    """Turn a Logs folder into the Launch.log path inside it.
+
+    Accepts the file itself too, so an existing config that stored the full
+    path — every version before this one — keeps working untouched, and so does
+    someone who browses to the file out of habit.
+    """
+    if not folder:
+        return ""
+    folder = os.path.normpath(folder)
+    if os.path.basename(folder).lower().endswith(".log"):
+        return folder
+    return os.path.join(folder, LOG_FILE_NAME)
+
+
+def find_log_path_silent():
+    """Auto-detect Launch.log, or "" if not found.
+
+    The file only appears once the game has run, but the FOLDER is created by
+    the installer — so a folder that exists with no log in it yet is still the
+    right answer, and is the normal state of affairs for someone setting this
+    up before their first launch.
+    """
+    for path in log_folder_candidates():
+        candidate = os.path.join(path, LOG_FILE_NAME)
+        if os.path.exists(candidate):
+            return candidate
+    folder = find_log_folder_silent()
+    return os.path.join(folder, LOG_FILE_NAME) if folder else ""
 
 
 def find_workshop_folder(game_exe=None):

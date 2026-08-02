@@ -3,31 +3,37 @@
 Checks the repo's latest release, and if it's newer, downloads the app zip and
 swaps it over the running install.
 
-The awkward part is that this is a PyInstaller *onedir* build: Windows won't
-let a running exe be overwritten. So applying an update is a three-step dance:
+The awkward part is that this is a PyInstaller *onedir* build, and Windows will
+not let a running exe be overwritten. Every earlier version of this module
+tried to work around that by waiting for the app to close and then copying over
+the top — and when that went wrong it went wrong in total silence, which is how
+an update could appear to succeed and change nothing at all.
+
+It doesn't overwrite anything now. Windows is perfectly happy to RENAME a
+running exe, so applying an update is:
 
   1. Download and extract the new build into a staging folder in %TEMP%.
-  2. Write a small .bat that waits for our PID to exit, copies the staged
-     files over the install folder, and relaunches us.
-  3. Spawn that .bat detached and quit.
+  2. Verify it against the build.json it ships with, BEFORE touching anything.
+  3. Write a .bat that waits for our PID to exit, MOVES the current exe and
+     _internal into a version-stamped backup folder, copies the new build into
+     the space they left, and starts it.
+  4. Spawn that .bat in its own console and quit.
 
-The copy is done in two passes, because the install folder holds two very
-different kinds of thing:
+Why a move rather than a copy-over:
 
-  * The install ROOT is shared with the user. xipod_config.json, presets, and
-    quite possibly their entire music library live here, because the app is
-    portable and people unzip it wherever they like. This pass is additive
-    (robocopy /E). Mirroring it would delete all of that.
+  * Nothing is ever overwritten while running, so the failure mode is gone.
+  * A move within one volume is instant, whatever the size.
+  * Settings, presets and music never move, so there is nothing to migrate and
+    nothing to orphan. The install folder and any desktop shortcut keep working.
+  * _internal is written into empty space, so files dropped between versions
+    can't accumulate — which an additive copy used to allow forever.
+  * The backup is a complete, working previous version. Reverting is moving two
+    things back, and it stays put until the user deletes it.
 
-  * _internal/ is generated wholly by PyInstaller and contains nothing the user
-    or the app ever writes — data_path() resolves to the root, never here. This
-    pass IS a mirror (/MIR), and needs to be.
-
-That second point used to be additive too, which was wrong twice over. Files
-dropped between versions lingered forever, so an install accumulated debris
-from every version it had ever been. Worse, a onedir exe embeds a PYZ whose
-module set has to match the .pyd/.dll files sitting beside it in _internal —
-so a half-old _internal isn't untidy, it's a build that was never tested.
+_internal is backed up alongside the exe deliberately: it holds the Python
+runtime and every DLL the exe loads, and a onedir exe embeds a PYZ whose module
+set must match it. An old exe against a new _internal doesn't start, so backing
+up one without the other would leave a revert that quietly fails.
 
 Everything here is stdlib. Nothing is executed from the download: we extract a
 zip of data files and copy them, and the only thing spawned is a .bat we wrote
@@ -37,6 +43,7 @@ ourselves.
 import json
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -55,9 +62,27 @@ from paths import is_frozen
 ASSET_PREFIX = "anarchyradiofm_app"
 ASSET_SUFFIX = ".zip"
 
-# The exe that must exist inside a downloaded build for it to be considered
-# valid. If this isn't in the zip, it isn't our app and we don't touch it.
-EXE_NAME = "AnarchyRadioFM.exe"
+# What our exe looks like inside a build. Matched as a prefix rather than a
+# fixed name so a folder is still recognised whatever the exe ended up called.
+EXE_PREFIX = "anarchyradiofm"
+EXE_SUFFIX = ".exe"
+
+
+def find_app_exe(folder):
+    """The app exe inside `folder`, or "". Newest-looking name wins."""
+    try:
+        names = sorted(os.listdir(folder))
+    except OSError:
+        return ""
+    matches = [n for n in names
+               if n.lower().startswith(EXE_PREFIX)
+               and n.lower().endswith(EXE_SUFFIX)]
+    if not matches:
+        return ""
+    # A versioned name beats a bare one, so a folder holding both picks the
+    # real build rather than a leftover.
+    matches.sort(key=lambda n: ("_v" not in n.lower(), n.lower()))
+    return os.path.join(folder, matches[0])
 
 # Files that must survive an update no matter what.
 _KEEP = ("xipod_config.json", "xipod_presets.json", ".spotify_cache.json")
@@ -195,19 +220,24 @@ def _safe_extract(zip_path, dest_dir):
 
 
 def _find_build_root(extracted):
-    """Locate the folder holding AnarchyRadioFM.exe inside an extracted zip.
+    """Locate the folder holding our exe inside an extracted zip.
 
-    The release zip wraps everything in an AnarchyRadioFM/ folder, but don't
-    depend on the name — just go looking for the exe.
+    The release zip wraps everything in a folder named after the version, but
+    don't depend on the name — just go looking for the exe.
     """
-    for root, _dirs, files in os.walk(extracted):
-        if EXE_NAME.lower() in {f.lower() for f in files}:
+    for root, _dirs, _files in os.walk(extracted):
+        if find_app_exe(root):
             return root
     return ""
 
 
-def stage(zip_path):
+def stage(zip_path, staging_dir=None):
     """Extract an update, verify it, and return the folder to copy from.
+
+    `staging_dir` overrides where it unpacks. The default sits beside the zip,
+    which is a temp folder for a real download — but not for anything pointed
+    at a zip in dist/, which would then grow a `staged/` folder inside the
+    release output.
 
     Raises if the archive doesn't contain our app, or if it contains a
     build.json that doesn't match what was actually extracted. Verification
@@ -218,12 +248,12 @@ def stage(zip_path):
     and refusing to install them would be a worse bug than the one this guards
     against.
     """
-    staging = os.path.join(os.path.dirname(zip_path), "staged")
+    staging = staging_dir or os.path.join(os.path.dirname(zip_path), "staged")
     os.makedirs(staging, exist_ok=True)
     _safe_extract(zip_path, staging)
     build_root = _find_build_root(staging)
     if not build_root:
-        raise ValueError(f"{EXE_NAME} not found in the download — not applying it.")
+        raise ValueError("No Anarchy Radio FM exe in the download — not applying it.")
 
     manifest = build_manifest.read(build_root)
     if manifest:
@@ -243,18 +273,114 @@ def stage(zip_path):
     return build_root
 
 
+BACKUP_PREFIX = "_previous_v"
+
+
+def exe_file_version(exe_path):
+    """The version stamped into an exe's Windows resource, or "".
+
+    Only used as a fallback when there's no build.json to read — which means
+    any install from before 2.4.1. Without it those back up into a folder
+    called "_previous_vunknown", which tells the user nothing at the exact
+    moment they're deciding whether it's safe to delete.
+
+    Shelling out to PowerShell rather than taking a dependency: this runs once,
+    during an update, and only when the cheaper answer isn't available.
+    """
+    if not exe_path or sys.platform != "win32" or not os.path.isfile(exe_path):
+        return ""
+    try:
+        out = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command",
+             f"(Get-Item -LiteralPath '{exe_path}').VersionInfo.FileVersion"],
+            capture_output=True, timeout=20,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        return out.stdout.decode("utf-8", "replace").strip()
+    except Exception as e:
+        console.debug(f"Couldn't read the exe version: {e}")
+        return ""
+
+
+def installed_version_of(install_dir):
+    """Best available version for an install: build.json, then the exe."""
+    return (build_manifest.installed_version(install_dir)
+            or exe_file_version(find_app_exe(install_dir)))
+
+
+def backup_dir_name(old_version):
+    """Folder the outgoing version is moved into. One item, version stamped.
+
+    Windows refuses to overwrite or delete a running exe, but it is perfectly
+    happy to RENAME one. So the update moves the old version aside rather than
+    fighting it — which is the whole trick. No second install folder, no
+    settings to migrate, no music orphaned in a directory nobody deletes, and
+    the shortcut on someone's desktop still points at the right file after.
+
+    `_internal` moves with it. That folder is the Python runtime and every DLL
+    the exe loads, and an old exe against a new `_internal` will not start — so
+    backing up one without the other would leave a revert that quietly fails.
+    Moving it aside also means the incoming `_internal` is written into empty
+    space, which is what stops stale files accumulating.
+
+    A folder rather than loose `.old` files, and moved rather than zipped:
+    a move within one volume is instant whatever the size, while compressing
+    ~174 MB would stall every single update for the better part of a minute to
+    produce something that gets deleted on next launch anyway.
+    """
+    return f"{BACKUP_PREFIX}{old_version or 'unknown'}"
+
+
+def find_backups(install_dir=None):
+    """Previous versions parked in an install folder, newest name last."""
+    install_dir = os.path.abspath(install_dir or os.path.dirname(sys.executable))
+    try:
+        entries = sorted(os.listdir(install_dir))
+    except OSError:
+        return []
+    out = []
+    for name in entries:
+        full = os.path.join(install_dir, name)
+        if name.lower().startswith(BACKUP_PREFIX.lower()) and os.path.isdir(full):
+            out.append({
+                "name": name,
+                "path": full,
+                "version": name[len(BACKUP_PREFIX):],
+                "bytes": _folder_size(full),
+            })
+    return out
+
+
+def _folder_size(path):
+    total = 0
+    for root, _dirs, files in os.walk(path):
+        for name in files:
+            try:
+                total += os.path.getsize(os.path.join(root, name))
+            except OSError:
+                pass
+    return total
+
+
 def apply_and_restart(build_root, install_dir=None, exe_path=None):
-    """Hand off to a helper that swaps the files once we've exited.
+    """Hand off to a helper that installs the new build once we've exited.
 
     Returns the helper script path. The caller should quit immediately after —
     the helper is waiting on our PID.
     """
     install_dir = os.path.abspath(install_dir or os.path.dirname(sys.executable))
-    exe_path = exe_path or sys.executable
     helper_dir = tempfile.mkdtemp(prefix="afm_apply_")
     helper = os.path.join(helper_dir, "apply_update.bat")
 
-    excludes = " ".join(_KEEP)
+    new_exe_name = os.path.basename(find_app_exe(build_root) or "")
+    if not new_exe_name:
+        raise ValueError("Staged build has no exe to launch.")
+
+    # build.json first, then the exe's own resource, then the running version.
+    # The last one is right when the app updates itself — we ARE the old
+    # version — but wrong in the test harness, which isn't running it.
+    old_version = installed_version_of(install_dir) or version.__version__
+    backup_dir = backup_dir_name(old_version)
+    current_exe = os.path.basename(find_app_exe(install_dir) or new_exe_name)
 
     # Paths arrive as ARGUMENTS, never baked into the script text. cmd reads a
     # .bat in the console's OEM codepage, so a path written into the file as
@@ -265,27 +391,31 @@ def apply_and_restart(build_root, install_dir=None, exe_path=None):
     # The body below is therefore kept strictly ASCII. Do not put an em dash in
     # here: the shipped v2.2-v2.4 script had one, and non-ASCII bytes in a .bat
     # are exactly the kind of thing that works on your machine and not theirs.
+    excludes = " ".join(_KEEP)
+
     script = f"""@echo off
 setlocal
 rem Anarchy Radio FM updater - written by the app, not shipped with it.
-rem Waits for the running app to exit, swaps the new build in, relaunches.
-rem   %1 = new build   %2 = install dir   %3 = exe to relaunch   %4 = staging
+rem Moves the running version aside (Windows allows RENAMING a running exe,
+rem just not overwriting it), then writes the new one into the same folder.
+rem Settings, presets and music never move, and the shortcut still works.
+rem   %1 = staged build   %2 = install folder   %3 = staging
 
 set "SRC=%~1"
 set "DST=%~2"
-set "APP=%~3"
-set "STAGING=%~4"
+set "STAGING=%~3"
 set "LOG=%TEMP%\\anarchyfm_update.log"
+set "BAK=%DST%\\{backup_dir}"
 
 echo Anarchy Radio FM update log - %DATE% %TIME% > "%LOG%"
-echo   from: %SRC% >> "%LOG%"
-echo   to  : %DST% >> "%LOG%"
+echo   staged  : %SRC% >> "%LOG%"
+echo   install : %DST% >> "%LOG%"
+echo   backup  : %BAK% >> "%LOG%"
 
 rem System32 tools by full path. "find" in particular is a byword for being
 rem shadowed - Git for Windows, the WSL shims and half the unix ports for
 rem Windows all ship one. If the wrong find answers here it errors instead of
-rem matching, the loop exits immediately, and robocopy then tries to overwrite
-rem an exe that is still running. Silent, and miserable to reproduce.
+rem matching, the loop exits immediately, and the copy starts too early.
 set "SYS=%SystemRoot%\\System32"
 
 echo Waiting for Anarchy Radio FM to close...
@@ -296,43 +426,76 @@ if not errorlevel 1 (
     goto waitloop
 )
 
-echo Applying update...
+echo Moving the old version aside...
+echo [backup] >> "%LOG%"
 
-rem Pass 1 - the install root, ADDITIVE. Shared with the user: their config,
-rem presets and quite possibly their whole music library live here.
-echo [pass 1] root, additive >> "%LOG%"
-"%SYS%\\robocopy.exe" "%SRC%" "%DST%" /E /R:3 /W:1 /XF {excludes} /XD "%SRC%\\_internal" >> "%LOG%" 2>&1
-if errorlevel 8 goto failed
+rem Replace any backup left by an earlier update of this same version.
+if exist "%BAK%" rmdir /S /Q "%BAK%" >nul 2>&1
+mkdir "%BAK%" 2>nul
 
-rem Pass 2 - _internal, MIRRORED. Entirely PyInstaller's; the app never writes
-rem here. Mirroring clears out files dropped between versions, which an
-rem additive copy left behind forever.
-if exist "%SRC%\\_internal" (
-    echo [pass 2] _internal, mirrored >> "%LOG%"
-    robocopy "%SRC%\\_internal" "%DST%\\_internal" /MIR /R:3 /W:1 >> "%LOG%" 2>&1
-    if errorlevel 8 goto failed
+rem A move within one volume is a rename: instant, whatever the size.
+if exist "%DST%\\_internal" (
+    move "%DST%\\_internal" "%BAK%\\_internal" >> "%LOG%" 2>&1
+    if errorlevel 1 goto failed
 )
+if exist "%DST%\\{current_exe}" (
+    move "%DST%\\{current_exe}" "%BAK%\\{current_exe}" >> "%LOG%" 2>&1
+    if errorlevel 1 goto revert
+)
+if exist "%DST%\\build.json" copy /Y "%DST%\\build.json" "%BAK%\\" >nul 2>&1
 
-rem Don't relaunch something that isn't there - a missing exe here means the
-rem swap went wrong in a way robocopy's exit code didn't cover.
-if not exist "%DST%\\{EXE_NAME}" goto failed
+rem Self-documenting, so the folder still makes sense in six months.
+> "%BAK%\\HOW_TO_REVERT.txt" echo Anarchy Radio FM {old_version}
+>> "%BAK%\\HOW_TO_REVERT.txt" echo.
+>> "%BAK%\\HOW_TO_REVERT.txt" echo This is the version you had before updating. To go back to it:
+>> "%BAK%\\HOW_TO_REVERT.txt" echo.
+>> "%BAK%\\HOW_TO_REVERT.txt" echo   1. Close Anarchy Radio FM.
+>> "%BAK%\\HOW_TO_REVERT.txt" echo   2. In the folder above this one, delete _internal and {new_exe_name}.
+>> "%BAK%\\HOW_TO_REVERT.txt" echo   3. Move _internal and {current_exe} from here back up into it.
+>> "%BAK%\\HOW_TO_REVERT.txt" echo.
+>> "%BAK%\\HOW_TO_REVERT.txt" echo Your settings and music are not in here - they stayed where they
+>> "%BAK%\\HOW_TO_REVERT.txt" echo were and work with either version.
+>> "%BAK%\\HOW_TO_REVERT.txt" echo.
+>> "%BAK%\\HOW_TO_REVERT.txt" echo Nothing needs this folder. Delete it whenever you want the space back.
 
-echo [done] update applied >> "%LOG%"
-start "" "%APP%"
-rem Clean up staging on success only; on failure it's the manual fallback.
+echo Installing...
+rem /E, never /MIR - mirroring would delete the backup we just made, along
+rem with the user's config and any music kept beside the exe. _internal is
+rem written into empty space because the old one was moved away, so nothing
+rem stale can survive anyway. /XD keeps robocopy out of the backup.
+echo [copy] build >> "%LOG%"
+"%SYS%\\robocopy.exe" "%SRC%" "%DST%" /E /R:3 /W:1 /XF {excludes} /XD "%BAK%" >> "%LOG%" 2>&1
+if errorlevel 8 goto revert
+
+if not exist "%DST%\\{new_exe_name}" goto revert
+
+echo [done] installed >> "%LOG%"
+start "" "%DST%\\{new_exe_name}"
 if not "%STAGING%"=="" rmdir /S /Q "%STAGING%" >nul 2>&1
 exit /b 0
+
+:revert
+rem Put back exactly what was moved, so a half-finished update leaves a
+rem working app rather than a puzzle.
+echo [REVERTING] >> "%LOG%"
+if exist "%BAK%\\{current_exe}" (
+    if exist "%DST%\\{new_exe_name}" del /F /Q "%DST%\\{new_exe_name}" >nul 2>&1
+    move /Y "%BAK%\\{current_exe}" "%DST%\\{current_exe}" >> "%LOG%" 2>&1
+)
+if exist "%BAK%\\_internal" (
+    if exist "%DST%\\_internal" rmdir /S /Q "%DST%\\_internal" >nul 2>&1
+    move "%BAK%\\_internal" "%DST%\\_internal" >> "%LOG%" 2>&1
+)
+rmdir /S /Q "%BAK%" >nul 2>&1
 
 :failed
 echo [FAILED] >> "%LOG%"
 echo.
-echo The update could not be applied cleanly.
+echo The update could not be installed, so your existing version has been
+echo put back. Start it as usual.
 echo.
-echo Anarchy Radio FM has NOT been started, in case the install is
-echo half-updated. You can finish it by hand: copy everything from
+echo To update by hand instead, the new version is unpacked here:
 echo   %SRC%
-echo over
-echo   %DST%
 echo.
 echo A log of what happened is at:
 echo   %LOG%
@@ -344,15 +507,64 @@ exit /b 1
     with open(helper, "w", encoding="ascii", newline="\r\n") as f:
         f.write(script)
 
+    # CREATE_NEW_CONSOLE, not DETACHED_PROCESS. Two reasons, both learned the
+    # hard way:
+    #
+    #  * Lifetime. Detached, the helper died partway through its wait loop when
+    #    the process that spawned it went away — the log stopped after its own
+    #    header and no install ever happened. Its own console makes it properly
+    #    independent of whatever started it.
+    #  * Visibility. Detached means no stdout anywhere, so "Installing..." and
+    #    the entire failure branch — error text, log path, pause — were written
+    #    to nothing at all. Every update failure in this app's history has been
+    #    silent, and this is why. A small console that says what it's doing is
+    #    worth far more than a tidy one that says nothing.
     creation = 0
     if sys.platform == "win32":
-        creation = getattr(subprocess, "DETACHED_PROCESS", 0) | \
+        creation = getattr(subprocess, "CREATE_NEW_CONSOLE", 0) | \
                    getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
-    subprocess.Popen(["cmd", "/c", helper, build_root, install_dir, exe_path,
+    subprocess.Popen(["cmd", "/c", helper, build_root, install_dir,
                       os.path.dirname(build_root)],
                      cwd=helper_dir, creationflags=creation, close_fds=True)
-    console.shen("Update staged — closing so it can be applied.")
+    console.shen(f"Update staged — your current version is being kept in "
+                 f"{backup_dir}. Restarting.")
     return helper
+
+
+def describe_backups(install_dir=None):
+    """A one-line summary of kept previous versions, or "".
+
+    Reported, not prompted. The backup exists so that reverting is always
+    possible, which means it has to still be there when someone needs it —
+    a dialog nagging to delete it on every launch would defeat the point.
+    """
+    backups = find_backups(install_dir)
+    if not backups:
+        return ""
+    parts = [f"{b['version']} ({b['bytes'] / (1024 * 1024):.0f} MB)"
+             for b in backups]
+    return ", ".join(parts)
+
+
+def remove_backup(path):
+    """Delete a kept previous version. Returns (ok, message)."""
+    def _clear(func, target, _exc):
+        try:
+            os.chmod(target, stat.S_IWRITE)
+            func(target)
+        except OSError:
+            pass
+
+    try:
+        if sys.version_info >= (3, 12):
+            shutil.rmtree(path, onexc=_clear)
+        else:                              # pragma: no cover - older Pythons
+            shutil.rmtree(path, onerror=_clear)
+    except Exception as e:
+        return False, str(e)
+    if os.path.isdir(path):
+        return False, "some files were in use and couldn't be removed."
+    return True, ""
 
 
 def report_install():

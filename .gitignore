@@ -14,6 +14,11 @@ env/
 # the experimental Spotify feature, your Spotify API credentials.
 xipod_config.json
 
+# --- WIP ---
+# Contains work in progress docs and tracking of features
+wip/
+update_test/
+
 # Spotify OAuth token cache — access/refresh tokens for YOUR account.
 .spotify_cache.json
 
@@ -48,4 +53,5 @@ dist/
 Thumbs.db
 desktop.ini
 .DS_Store
+
 

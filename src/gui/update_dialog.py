@@ -33,6 +33,9 @@ class UpdateDialog(QWidget):
         self.release = release
         self._on_skip = on_skip
         self._busy = False
+        # True once the handoff to the installer has happened, so the close
+        # that follows isn't mistaken for the user dismissing the offer.
+        self._installing = False
 
         self.setWindowTitle("AFM — Update Available")
         self.setMinimumSize(600, 520)
@@ -67,6 +70,22 @@ class UpdateDialog(QWidget):
         self.bar.setVisible(False)
         root.addWidget(self.bar)
 
+        # Standing disclaimer. Updating touches files on someone else's
+        # machine, past an antivirus, a synced drive and whatever else is
+        # holding a handle open — it cannot be guaranteed, only made likely.
+        # Telling people how to CHECK, and that downloading by hand always
+        # works, costs one label and saves the failure mode where an update
+        # quietly does nothing and nobody finds out for a month.
+        disclaimer = QLabel(
+            "After updating, check it took: right-click the exe → Properties → "
+            "Details, and look at the version. If it hasn't changed, or "
+            "anything feels off, download the zip by hand from the releases "
+            "page — that always works.")
+        disclaimer.setWordWrap(True)
+        disclaimer.setFont(QFont(FONT_FAMILY, 9))
+        disclaimer.setStyleSheet(f"color: {PRIMARY_DIM};")
+        root.addWidget(disclaimer)
+
         self.auto_cb = QCheckBox("Check for updates when Anarchy Radio FM starts")
         self.auto_cb.setChecked(True)
         root.addWidget(self.auto_cb)
@@ -83,10 +102,20 @@ class UpdateDialog(QWidget):
         self.install_btn.clicked.connect(self._on_install)
         row.addWidget(self.install_btn)
 
-        page_btn = QPushButton("Open Releases Page")
-        page_btn.setCursor(Qt.PointingHandCursor)
-        page_btn.clicked.connect(lambda: updater.open_releases_page())
-        row.addWidget(page_btn)
+        # Always available, never a consolation prize. Updating in place is a
+        # convenience; downloading the zip is the thing that cannot fail, and
+        # anyone who has had one update go quiet on them should be able to
+        # reach for it without hunting through a menu.
+        self.manual_btn = QPushButton("Download Manually")
+        self.manual_btn.setCursor(Qt.PointingHandCursor)
+        self.manual_btn.setFixedWidth(180)
+        self.manual_btn.setToolTip(
+            "Opens the releases page so you can download the zip yourself.\n"
+            "Unzip it wherever you like and run AnarchyRadioFM.exe — your\n"
+            "settings live in the folder you already have, so copy\n"
+            "xipod_config.json and xipod_presets.json across if you want them.")
+        self.manual_btn.clicked.connect(self._on_manual)
+        row.addWidget(self.manual_btn)
 
         later = QPushButton("Later")
         later.setCursor(Qt.PointingHandCursor)
@@ -139,20 +168,42 @@ class UpdateDialog(QWidget):
         else:
             self.bar.setRange(0, 0)   # indeterminate
 
+    def _on_manual(self):
+        updater.open_releases_page()
+        self.status.setText(
+            "Releases page opened. Download the zip, unzip it, and run "
+            "AnarchyRadioFM.exe from the new folder.")
+        console.shen("Releases page opened — grab the zip and unzip it anywhere.")
+
     def _on_failed(self, message):
         self._busy = False
         self.bar.setVisible(False)
         self.install_btn.setEnabled(True)
-        self.status.setText(f"Update failed: {message}")
+        self.status.setText(
+            f"Update failed: {message}\n"
+            "Nothing has been changed. Use Download Manually — that always works.")
         console.warn(f"Update failed: {message}")
+        console.shen("Nothing was changed. Download Manually is the reliable way in.")
+        # Make the fallback the obvious next move rather than one of three
+        # equal-looking buttons.
+        self.manual_btn.setStyleSheet(
+            f"background-color: {PRIMARY_FAINT}; border: 1px solid {PRIMARY_DIM}; "
+            f"font-weight: bold; padding: 8px;")
 
     def _on_ready(self, build_root):
         self.bar.setValue(100)
         self.status.setText("Download verified. Restarting to apply…")
         console.shen("Update downloaded — restarting to apply.")
+        # Set BEFORE quitting. Quitting closes this window, which fires
+        # closeEvent, which used to record the version as "skipped" — so
+        # installing an update was the surest way to never be offered it
+        # again. If the swap then failed, the app sat on the old version
+        # refusing to mention the new one ever again.
+        self._installing = True
         try:
             updater.apply_and_restart(build_root)
         except Exception as e:
+            self._installing = False
             self._on_failed(f"couldn't start the installer: {e}")
             return
         # The helper is waiting on our PID; get out of its way.
@@ -160,7 +211,9 @@ class UpdateDialog(QWidget):
         QApplication.instance().quit()
 
     def closeEvent(self, event):
-        if self._on_skip:
+        # Only the auto-check preference is remembered. Dismissing this window
+        # means "not now" — the button says Later, and Later is not Never.
+        if self._on_skip and not self._installing:
             self._on_skip(self.release.version, self.auto_cb.isChecked())
         self.closed.emit()
         event.accept()

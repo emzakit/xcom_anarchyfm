@@ -22,6 +22,12 @@ from gui.theme import (
 from gui.helpers import make_divider, paint_own_background
 import console
 
+# Where the Make a Pack button sends people. Building a pack is a manual
+# job through the XCOM 2 SDK — see _on_make_a_pack.
+MUSIC_PACK_GUIDE_URL = (
+    "https://github.com/emzakit/xcom_anarchyfm/wiki/Making-a-music-pack"
+)
+
 
 SORT_NAME = "Name (A-Z)"
 SORT_NAME_DESC = "Name (Z-A)"
@@ -106,6 +112,19 @@ class AddonsDialog(QWidget):
         self.summary.setStyleSheet(f"color: {PRIMARY_DIM}; font-size: 11px;")
         row.addWidget(self.summary)
         row.addStretch()
+
+        # Making a pack belongs with browsing packs, not on the main panel.
+        # It's a once-in-a-while authoring job, and it was taking up a slot
+        # next to the controls people press every session.
+        make_btn = QPushButton("Make a Pack")
+        make_btn.setCursor(Qt.PointingHandCursor)
+        make_btn.setFixedWidth(130)
+        make_btn.setToolTip(
+            "Opens the guide for building your own music pack\n"
+            "and publishing it to the Workshop.")
+        make_btn.clicked.connect(self._on_make_a_pack)
+        row.addWidget(make_btn)
+
         # "&&" — a single & is swallowed as a Qt mnemonic accelerator.
         save_btn = QPushButton("Save && Rescan")
         save_btn.setCursor(Qt.PointingHandCursor)
@@ -269,6 +288,19 @@ class AddonsDialog(QWidget):
         self.summary.setText(f"{on} of {len(self.addons)} addon(s) enabled")
 
     # ------------------------------------------------------------------ #
+
+    def _on_make_a_pack(self):
+        """Open the pack-authoring guide.
+
+        A page rather than a one-click scaffolder: the old version built a
+        ready-to-publish ModBuddy project, which was flaky, and a button that
+        packages up someone's mp3s for redistribution is a very different
+        thing from a page explaining how to do it yourself.
+        """
+        import webbrowser
+        console.shen("Opening the music pack guide in your browser.")
+        webbrowser.open(MUSIC_PACK_GUIDE_URL)
+        self.status.setText("Guide opened in your browser.")
 
     def _on_save(self):
         import addons as addons_mod
