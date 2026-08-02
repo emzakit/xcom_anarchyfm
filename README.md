@@ -34,24 +34,21 @@
 
 ## 📡 Incoming transmission
 
-Somewhere out in the Wilderness there's a van. Inside it, two idiots called
-**JAX** and **SILO** are running a pirate radio station on stolen broadcast gear
-and no discernible survival instinct.
+There's a van out in the Wilderness. It shouldn't run. ADVENT would very much like to know where it is. Inside, two absolute liabilities called **JAX** and **SILO** are running an unlicensed radio station off gear that fell out of the back of a supply truck, and neither of them has once stopped talking long enough to notice they're broadcasting straight into a warship full of Commanders.
 
-They have no idea XCOM is listening. They'd be alarmed to find out. They have
-never once stopped talking.
+They have no idea XCOM is listening. Nobody's told them. Nobody's going to.
 
-We've got eyes on your troops, Commander, and we give them the soundtrack their efforts deserve.
+Here's what Command's been feeding you: a lovely orchestral score, extremely tasteful, and — forty hours in — extremely the same. This is the pirate signal underneath it, and unlike ADVENT's propaganda channel, **this one takes requests.**
 
-- 🎻 **Hans Zimmer** scoring the Geoscape while the world quietly ends? Go on then.
-- 🤘 **Slipknot** the instant a Sectoid pops out? Absolutely.
-- 💃 **The Spice Girls** over an ADVENT ambush because you thought it'd be funny? Nobody here is stopping you.
+- 🎻 **Hans Zimmer** narrating the Geoscape while the planet quietly loses? Sure, why not.
+- 🤘 **Slipknot** the exact moment a Sectoid pops out of the dirt? Obviously.
+- 💃 **The Spice Girls** over an ADVENT ambush, purely because you thought it'd be funny six hours ago and it's now permanently canon? Not our place to stop you.
 
-**Anarchy Radio FM replaces XCOM 2's soundtrack with whatever you want.** Drop
-files into folders. Each screen gets its own music. That's the entire idea.
+We've got eyes on your squad, Commander, and frankly they deserve better than the same string section on loop.
 
-> No conversions. No renaming. No ffmpeg. No `.upk` files the size of a small
-> moon. **Just files in folders and an exe.**
+**Anarchy Radio FM rips out XCOM 2's soundtrack and lets you put anything back in.** Drop files into folders. Each screen gets its own playlist. That's the whole pitch.
+
+> No conversions. No file renaming. No ffmpeg gymnastics. No `.upk` file the size of a small, angry moon. **Files, folders, an exe. Done.**
 
 ---
 
@@ -60,13 +57,11 @@ files into folders. Each screen gets its own music. That's the entire idea.
 **1.** Subscribe to **[the mod](https://steamcommunity.com/sharedfiles/filedetails/?id=3772839338)**
 and **[Music Modding System](https://steamcommunity.com/workshop/filedetails/?id=757398474)**.
 
-> You need **both**. MMS shuts the game's own music up; we play yours. Think
-> Bradford clearing the channel so you can actually hear the radio.
+> Both, not one. MMS's entire job is making the game's own soundtrack shut up; ours is playing yours instead. Skip MMS and you get two DJs fighting over the same microphone.
 
 **2.** Add **`-forcelogflush`** to XCOM 2's launch options.
 
-> Skip this and your music plays straight over the cinematics like a lad with
-> Bluetooth speakers on a train. **Do the step.**
+> Skip this one and your music barges straight over every cinematic, uninvited, like it owns the place. **Do the step. Trust us on this.**
 
 <details>
 <summary><strong>Show me exactly where →</strong>&nbsp; (Steam, and the Alternative Mod Launcher)</summary>
@@ -83,8 +78,9 @@ type it into the box at the bottom.
 </tr>
 </table>
 
-**Alternative Mod Launcher** — **Options → Settings → Active arguments**. Add it
-to the **end** of what's already there. Don't nuke the line — you'll regret it.
+**Alternative Mod Launcher** — **Options → Settings → Active arguments**. Stick
+it on the **end** of whatever's already in there. That existing text is doing a
+job — don't wipe it out to make room.
 
 <table>
 <tr>
@@ -96,37 +92,32 @@ to the **end** of what's already there. Don't nuke the line — you'll regret it
 </details>
 
 **3.** **[Download the app](https://github.com/emzakit/xcom_anarchyfm/releases/latest)**,
-unzip it anywhere, **run the exe.** A wizard does the boring bits.
+unzip it wherever, **run the exe.** A setup wizard does the tedious part so you don't have to.
 
-**4.** Drop your music into the folders it makes for you. **Done.** Go be a menace.
+**4.** Drop your music into the folders it builds for you. **That's it.** Go make some noise.
 
 <p align="center">
   <img src="assets/img_main_menu.png" alt="The Anarchy Radio FM control panel" width="420">
 </p>
 
 > **☝️ Coming from v2.2 or earlier?** Turn XCOM's Music volume **back up**
-> (*Options → Audio*). Cranking it to 0 was the old workaround for the game's
-> soundtrack bleeding through — that's fixed, and muting it now also gags MMS
-> and any music packs you're running. Free your sliders.
+> (*Options → Audio*). Zeroing it out used to be the only fix for the game's
+> own soundtrack bleeding through — that bug's dead now, and leaving the
+> slider at zero also gags MMS and every music pack you're running. Free the sliders.
 
 ---
 
 ## 📻 The good bit: Radio Mode
 
-One button. The Avenger tunes into a station and **every track starts at a
-random point** — as if the broadcast was already running and you just walked in
-mid-sentence.
+One button. The Avenger tunes into a station, and **every single track drops you in at a random point** — like the broadcast has been running the whole time and you just wandered into the room mid-sentence.
 
-**Tip:** grab an hour-long **GTA radio station
-rip** — DJ banter, fake adverts, the lot — and drop it in. Every trip back to
-the ship lands you mid-song, mid-advert, or mid-ramble about legally distinct
-energy drinks.
+**Try this:** find yourself an hour-long **GTA radio station rip** — DJ banter, fake adverts, all of it — and load it in. Every trip back to the ship lands you somewhere new: mid-song, mid-ad break, mid-rant about an energy drink that is legally, definitely, not Monster.
 
-Alternatively, subscribe to this silly XCOM podcast and enable it under music addons:
+Or subscribe to our own daft little XCOM podcast and switch it on under music addons:
 
 https://steamcommunity.com/sharedfiles/filedetails/?id=3775888357
 
-It's fun and gives you a taster of what you can do! *Vigilo Confido.*
+Good fun, and it shows you exactly what this thing can do. *Vigilo Confido.*
 
 [**→ Radio Mode in full**](https://github.com/emzakit/xcom_anarchyfm/wiki/Features#radio-mode)
 
@@ -141,10 +132,9 @@ It's fun and gives you a taster of what you can do! *Vigilo Confido.*
 
 ### 🎚️ Effects
 
-Radio filter, reverb, bass, chorus, bitcrush, echo — per screen, with presets.
+Radio filter, reverb, bass, chorus, bitcrush, echo — per screen, with presets ready to go.
 
-Want the Avenger sounding like a beaten-up field radio held together with tape
-and hope? **Two clicks.**
+Want the Avenger sounding like a field radio held together with tape, hope, and a war crime? **Two clicks.**
 
 **[Effects and per-state settings →](https://github.com/emzakit/xcom_anarchyfm/wiki/Features#the-buttons)**
 
@@ -154,13 +144,11 @@ and hope? **Two clicks.**
 <td width="42%"><img src="assets/img_spotify.png" alt="Spotify panel"></td>
 <td>
 
-### 🎧 Spotify *(experimental, and it's your call)*
+### 🎧 Spotify *(experimental, and entirely your call)*
 
-Pin a Spotify playlist to each screen. Works genuinely well — including
-different playlists for sneaking around versus everything going sideways.
+Pin a Spotify playlist to each screen. Genuinely works well — different moods for creeping around versus everything going up in flames.
 
-Needs Premium, the desktop app running, and **your own API keys**. It drives
-*your* account under *your* registration, which is deliberate.
+Needs Premium, the desktop app open, and **your own API keys**. It runs on *your* account under *your* registration, on purpose.
 
 **[Set up Spotify →](https://github.com/emzakit/xcom_anarchyfm/wiki/Spotify-setup)**
 
@@ -172,11 +160,9 @@ Needs Premium, the desktop app running, and **your own API keys**. It drives
 
 ### 📦 Music Addons
 
-Subscribe to a Workshop music pack and it **just turns up** in your library.
-Flick packs on and off, sort by genre, nothing copied to your drive.
+Subscribe to a Workshop music pack and it **just shows up** in your library. Flip packs on and off, sort by genre, and nothing gets copied onto your drive.
 
-No mod launcher wrangling. The app finds them itself, like a Skyranger that
-actually shows up on time.
+No mod launcher wrangling required. The app goes and finds them itself — a Skyranger that's actually on schedule for once.
 
 **[Music Addons →](https://github.com/emzakit/xcom_anarchyfm/wiki/Features#music-addons)**
 · **[Make your own →](https://github.com/emzakit/xcom_anarchyfm/wiki/Making-a-music-pack)**
@@ -185,9 +171,7 @@ actually shows up on time.
 </tr>
 </table>
 
-Plus **self-updating** — it keeps your old version in a folder next to the new
-one, so rolling back is drag-and-drop, not a rescue mission — and **per-screen
-everything**: volume, looping, random start, all remembered between sessions.
+Also on tap: **self-updating** — it parks your old version in its own folder next to the new one, so rolling back is drag-and-drop, not a rescue op — plus **per-screen everything**: volume, looping, random start, all remembered exactly as you left it.
 
 ---
 
@@ -202,12 +186,9 @@ JAX : SILO, cut state_mission_explore. We're going to state_mission_combat. 3 re
 SILO: Carrier's gone. Killing the transmitter before ADVENT triangulates us. Again.
 ```
 
-**SHEN** handles setup and tells you when something's genuinely on fire — she
-knows you're listening. **JAX** (on the decks) and **SILO** (on the wire) do
-not, and never will.
+**SHEN** runs setup and tells you straight when something's genuinely on fire — she knows you're out there listening. **JAX** (decks) and **SILO** (wire) do not, and never will, no matter how much they overshare.
 
-Every line they say lives in **one editable file** inside the app folder.
-Don't like them? Rewrite the entire crew. No code involved.
+Every line they say lives in **one editable file** inside the app folder. Don't rate the crew? Fire the lot of them and write your own. No code required.
 
 ---
 
@@ -230,42 +211,39 @@ Everything past "run the exe" lives in the
 
 ## ⚠️ Mission briefing: the honest bit
 
-Every mod page promises perfection. Here's the truth instead.
+Every mod page promises the moon. Here's what you actually get.
 
-**✅ The Avenger is the polished bit.** That's where the
-effort went and I'll happily stand behind them.
+**✅ The Avenger and Squad Select are the polished bits.** That's where the hours went, and I'll defend them without blinking.
 
-**🚧 The rest is beta.** It trips occasionally — an overlap, the wrong
-mood, timing that lands like a rookie panicking on turn one. It's good. It's not
-flawless.
+**🚧 The tactical side is beta.** Occasionally it trips — an overlap, the wrong mood cue, timing that lands like a rookie freezing on turn one. It's good. It is not flawless, and I won't tell you otherwise.
 
-**🤝 Running an MMS music pack alongside this** works properly as of v2.3. Fill
-the folders you care about; the pack covers the rest. This mod relies on MMS so it should be rather friendly towards it.
+**🤝 Running an MMS music pack alongside this** works properly as of v2.3. Fill the folders you actually care about; the pack quietly covers everything else. Very occasionally one screen plays your music one session and the pack's the next — flip that toggle off in the app and the pack wins, every time, no argument.
 
 **Running LWOTC** should be fine, although there might be some things I haven't seen yet. Please report issues!
 
 **[Known issues →](https://github.com/emzakit/xcom_anarchyfm/wiki/Troubleshooting#known-issues)**
 
 > **🛡️ Scanner flagged the exe?**
-> [It's a false positive](https://github.com/emzakit/xcom_anarchyfm/wiki/Troubleshooting#flagged-as-a-virus).
-> PyInstaller bundles Python into a single exe, which to an antivirus looks
-> **exactly** like what actual malware does — same trick, wildly different
-> intent. Classic case of mistaken identity. Don't fancy trusting a stranger's
-> binary? Sensible. [Build it yourself.](https://github.com/emzakit/xcom_anarchyfm/wiki/Building-the-exe)
+> [False alarm](https://github.com/emzakit/xcom_anarchyfm/wiki/Troubleshooting#flagged-as-a-virus).
+> PyInstaller stuffs an entire Python runtime into a single exe, which to an antivirus
+> looks **exactly** like what actual malware does — same wrapping paper, wildly
+> different contents. Textbook mistaken identity. Don't trust a stranger's
+> binary? Fair instinct. [Build it yourself.](https://github.com/emzakit/xcom_anarchyfm/wiki/Building-the-exe)
 
 ---
 
 ## 🏅 Credits
 
-Three years in the making, and a follow-up to my
+Three years in the making, and the follow-up to my
 **[Resistance Radio](https://steamcommunity.com/sharedfiles/filedetails/?id=2863096697)**
-mod. Built on the shoulders of
+mod. Built squarely on the shoulders of
 **[Music Modding System](https://steamcommunity.com/workshop/filedetails/?id=757398474)** —
-none of this happens without it. Genuinely. Go say thanks.
+none of this exists without it. Genuinely. Go thank them.
 
-Open source because everything should be, and partly in the hope that one of you
-XCOM gurus cracks doing this *inside* Unreal instead of leaning on an external
-audio player. That's the real dream. I got close. I did not get there.
+Open source because everything should be, and partly in the hope some XCOM
+wizard smarter than me works out how to do this *inside* Unreal instead of
+strapping an external audio player to the side of it. That's the real dream.
+I got close. I did not get there.
 
 Both mods are mine — **emzakit (Moondear)**. MIT licensed, see [`LICENSE`](LICENSE).
 
