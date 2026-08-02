@@ -243,9 +243,9 @@ mood, timing that lands like a rookie panicking on turn one. It's good. It's not
 flawless.
 
 **🤝 Running an MMS music pack alongside this** works properly as of v2.3. Fill
-the folders you care about; the pack covers the rest. *Very* rarely one screen
-plays your music one session and the pack's the next — flip that toggle off in
-the app and the pack wins every time.
+the folders you care about; the pack covers the rest. This mod relies on MMS so it should be rather friendly towards it.
+
+**Running LWOTC** should be fine, although there might be some things I haven't seen yet. Please report issues!
 
 **[Known issues →](https://github.com/emzakit/xcom_anarchyfm/wiki/Troubleshooting#known-issues)**
 
