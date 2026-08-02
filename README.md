@@ -129,7 +129,7 @@ Alternatively, subscribe to this silly XCOM podcast and enable it under music ad
 
 https://steamcommunity.com/sharedfiles/filedetails/?id=3775888357
 
-It's fun! *Vigilo Confido.*
+It's fun and gives you a taster of what you can do! *Vigilo Confido.*
 
 [**→ Radio Mode in full**](https://github.com/emzakit/xcom_anarchyfm/wiki/Features#radio-mode)
 
