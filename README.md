@@ -235,10 +235,10 @@ Everything past "run the exe" lives in the
 
 Every mod page promises perfection. Here's the truth instead.
 
-**✅ The Avenger and Squad Select are the polished bits.** That's where the
+**✅ The Avenger is the polished bit.** That's where the
 effort went and I'll happily stand behind them.
 
-**🚧 The tactical side is beta.** It trips occasionally — an overlap, the wrong
+**🚧 The rest is beta.** It trips occasionally — an overlap, the wrong
 mood, timing that lands like a rookie panicking on turn one. It's good. It's not
 flawless.
 
