@@ -2,7 +2,7 @@
   <img src="assets/git_banner.png" alt="Anarchy Radio FM" width="640">
 </p>
 
-<h1 align="center">XCOM 2: Anarchy Custom Music Engine (XIPOD)</h1>
+<h1 align="center">XCOM 2: Anarchy FM's Custom Music Engine (XIPOD)</h1>
 
 <p align="center">
   <strong>Your music. Your XCOM. Finally.</strong>
