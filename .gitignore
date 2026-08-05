@@ -14,6 +14,12 @@ env/
 # the experimental Spotify feature, your Spotify API credentials.
 xipod_config.json
 
+# Written beside the app on every start if it isn't there — the manual way to
+# create the config above when the app can't be opened to do it. Its source of
+# truth is src/bootstrap.py; the copy that lands here is a build artifact, and
+# committing it would make a second one that quietly drifts.
+create_config.bat
+
 # --- WIP ---
 # Contains work in progress docs and tracking of features
 wip/

@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 
 import zipfile
 
+import bootstrap
 import build_manifest
 import dialogue
 import launcher
@@ -176,6 +177,80 @@ class TestBuildManifest(unittest.TestCase):
             self.assertEqual(build_manifest.installed_version(tmp), "2.4")
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(build_manifest.installed_version(tmp), "")
+
+    # --- where it lives ----------------------------------------------- #
+
+    def test_it_is_written_inside_internal_not_beside_the_exe(self):
+        """A stray .json next to the exe reads as clutter, and deleting it
+        costs the user download verification with no hint of why."""
+        with tempfile.TemporaryDirectory() as tmp:
+            self._build(tmp, {"AnarchyRadioFM.exe": "exe"})
+            path = build_manifest.write(tmp, "9.9")
+
+            self.assertEqual(path, os.path.join(tmp, "_internal", "build.json"))
+            self.assertFalse(os.path.exists(os.path.join(tmp, "build.json")))
+            self.assertEqual(sorted(os.listdir(tmp)),
+                             ["AnarchyRadioFM.exe", "_internal"])
+
+    def test_it_does_not_hash_itself(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._build(tmp, {"AnarchyRadioFM.exe": "exe"})
+            build_manifest.write(tmp, "9.9")
+            self.assertNotIn("_internal/build.json",
+                             build_manifest.read(tmp)["files"])
+            self.assertEqual(build_manifest.verify(tmp), (True, []))
+
+    def test_an_install_from_before_the_move_is_still_readable(self):
+        """2.4.2 and earlier put it beside the exe. Those installs still have
+        to report their version, or an update can't name the backup folder."""
+        with tempfile.TemporaryDirectory() as tmp:
+            self._build(tmp, {"AnarchyRadioFM.exe": "exe"})
+            with open(os.path.join(tmp, "build.json"), "w") as f:
+                json.dump({"version": "2.4.2", "files": {}}, f)
+
+            self.assertEqual(build_manifest.installed_version(tmp), "2.4.2")
+
+    def test_the_internal_copy_wins_over_a_stale_root_one(self):
+        """Updating in place from 2.4.2 leaves the old one behind — reading it
+        would report the version the user just updated away from."""
+        with tempfile.TemporaryDirectory() as tmp:
+            self._build(tmp, {"AnarchyRadioFM.exe": "exe"})
+            with open(os.path.join(tmp, "build.json"), "w") as f:
+                json.dump({"version": "2.4.2", "files": {}}, f)
+            build_manifest.write(tmp, "2.4.3")
+
+            self.assertEqual(build_manifest.installed_version(tmp), "2.4.3")
+
+    def test_the_stale_root_copy_is_pruned(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._build(tmp, {"AnarchyRadioFM.exe": "exe"})
+            with open(os.path.join(tmp, "build.json"), "w") as f:
+                json.dump({"version": "2.4.2", "files": {}}, f)
+            build_manifest.write(tmp, "2.4.3")
+
+            self.assertTrue(build_manifest.prune_legacy_manifest(tmp))
+            self.assertFalse(os.path.exists(os.path.join(tmp, "build.json")))
+            self.assertEqual(build_manifest.installed_version(tmp), "2.4.3")
+
+    def test_pruning_never_removes_the_only_manifest_there_is(self):
+        """On an install that hasn't been updated yet, the root copy is the
+        real one. Deleting it would throw away what it's there to protect."""
+        with tempfile.TemporaryDirectory() as tmp:
+            self._build(tmp, {"AnarchyRadioFM.exe": "exe"})
+            with open(os.path.join(tmp, "build.json"), "w") as f:
+                json.dump({"version": "2.4.2", "files": {}}, f)
+
+            self.assertFalse(build_manifest.prune_legacy_manifest(tmp))
+            self.assertTrue(os.path.exists(os.path.join(tmp, "build.json")))
+
+    def test_a_stale_root_copy_is_never_hashed_as_build_content(self):
+        """It's left over from the previous version, so its hash would differ
+        on every install and fail verification for everyone."""
+        with tempfile.TemporaryDirectory() as tmp:
+            self._build(tmp, {"AnarchyRadioFM.exe": "exe", "build.json": "old"})
+            build_manifest.write(tmp, "2.4.3")
+            self.assertEqual(list(build_manifest.read(tmp)["files"]),
+                             ["AnarchyRadioFM.exe"])
 
 
 class TestUpdaterStaging(unittest.TestCase):
@@ -511,6 +586,153 @@ class TestGuiImports(unittest.TestCase):
             widget = build()
             self.assertIsNotNone(widget)
         app.processEvents()
+
+
+class TestSetupWindow(unittest.TestCase):
+    """The first-run wizard.
+
+    v2.4.2 shipped with seven of its methods missing, so __init__ raised
+    AttributeError on the first `self._browse_music` it tried to hand to a
+    button — before the window was drawn, which in a windowless build looks
+    like the app simply not starting. Nothing constructed this class in the
+    suite, so nothing caught it.
+    """
+
+    def setUp(self):
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        try:
+            from PySide6.QtWidgets import QApplication
+        except Exception:                       # pragma: no cover
+            self.skipTest("PySide6 not available")
+        self.app = QApplication.instance() or QApplication([])
+
+    def test_the_wizard_can_be_built(self):
+        from setup_gui import SetupWindow
+        self.assertIsNotNone(SetupWindow())
+
+    def test_the_wizard_can_be_built_over_an_existing_config(self):
+        """The --setup path, which passes the config back in to pre-fill."""
+        from setup_gui import SetupWindow
+        w = SetupWindow(existing_cfg={"game_exe": "D:/XCom2.exe",
+                                      "music_folder": "D:/music",
+                                      "radio_chunk_minutes": 25})
+        self.assertEqual(w.exe_field.text(), "D:/XCom2.exe")
+        self.assertEqual(w.chunk_spin.value(), 25)
+
+    def test_every_method_init_wires_up_exists(self):
+        """The actual defect, stated directly: __init__ hands bound methods to
+        signals and factories, and a name that isn't there raises on the way
+        past rather than when the button is clicked."""
+        import re
+        import inspect
+        from setup_gui import SetupWindow
+
+        window = SetupWindow()
+        referenced = set(re.findall(r"self\.(_[a-z_]+)",
+                                    inspect.getsource(SetupWindow)))
+        missing = sorted(n for n in referenced if not hasattr(window, n))
+        self.assertEqual(missing, [])
+
+    # --- _on_launch --------------------------------------------------- #
+
+    def _launch_into(self, tmp, existing_cfg=None, chunk=None):
+        """Fill the wizard in with valid paths under `tmp` and press LAUNCH.
+
+        Returns whatever save_config was handed, or None if validation
+        stopped it.
+        """
+        import setup_gui
+        from setup_gui import SetupWindow
+
+        exe = os.path.join(tmp, "XCom2.exe")
+        with open(exe, "w") as f:
+            f.write("")
+        workshop = os.path.join(tmp, "workshop")
+        logs = os.path.join(tmp, "Logs")
+        os.makedirs(workshop)
+        os.makedirs(logs)
+
+        saved = {}
+        original_save = setup_gui.save_config
+        original_find = setup_gui.find_log_path_silent
+        setup_gui.save_config = lambda cfg: saved.update({"cfg": cfg})
+        # Pinned, or an agent without XCOM installed gets "" here and
+        # _on_launch opens a modal dialog that never returns.
+        setup_gui.find_log_path_silent = lambda: os.path.join(logs, "Launch.log")
+        self.addCleanup(lambda: setattr(setup_gui, "save_config", original_save))
+        self.addCleanup(
+            lambda: setattr(setup_gui, "find_log_path_silent", original_find))
+
+        w = SetupWindow(existing_cfg=existing_cfg)
+        w.exe_field.setText(exe)
+        w.music_field.setText(os.path.join(tmp, "music"))
+        w.workshop_field.setText(workshop)
+        w.config_field.setText(os.path.join(tmp, "Config"))
+        w.addon_test_field.setText("")
+        if chunk is not None:
+            w.chunk_spin.setValue(chunk)
+        w._on_launch()
+        return saved.get("cfg")
+
+    def test_launch_writes_the_paths_it_asked_for(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = self._launch_into(tmp)
+            self.assertIsNotNone(cfg, "validation blocked a valid setup")
+            self.assertEqual(cfg["game_exe"], os.path.join(tmp, "XCom2.exe"))
+            self.assertEqual(cfg["music_folder"], os.path.join(tmp, "music"))
+            self.assertTrue(cfg["log_path"].endswith("Launch.log"))
+
+    def test_launch_saves_the_radio_chunk_length(self):
+        """The spinbox has been on this window since 2.4.1 and the value it
+        collected was never written anywhere."""
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = self._launch_into(tmp, chunk=45)
+            self.assertEqual(cfg["radio_chunk_minutes"], 45)
+
+    def test_launch_keeps_config_it_never_asked_about(self):
+        """Re-running setup must not be a way to lose your Spotify
+        credentials, your addon choices, or your volume."""
+        existing = {
+            "spotify": {"enabled": True, "client_id": "abc"},
+            "addons": {"1234567890": False},
+            "default_volume": 0.35,
+            "crossfade_ms": 900,
+            "debug_log_flush": True,
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = self._launch_into(tmp, existing_cfg=existing)
+            for key, value in existing.items():
+                self.assertEqual(cfg[key], value, f"{key} was discarded")
+
+    def test_launch_still_defaults_playback_settings_on_a_first_run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = self._launch_into(tmp)
+            self.assertEqual(cfg["default_volume"], 0.8)
+            self.assertEqual(cfg["crossfade_ms"], 2500)
+            self.assertTrue(cfg["shuffle"])
+            self.assertTrue(cfg["auto_close_with_game"])
+
+    def test_launch_refuses_without_a_workshop_folder(self):
+        """Required, because it's the only route to the installed mod's
+        Config — and without it the game's music plays over yours."""
+        import setup_gui
+        with tempfile.TemporaryDirectory() as tmp:
+            original = setup_gui.find_workshop_folder
+            setup_gui.find_workshop_folder = lambda exe=None: ""
+            self.addCleanup(
+                lambda: setattr(setup_gui, "find_workshop_folder", original))
+
+            from setup_gui import SetupWindow
+            exe = os.path.join(tmp, "XCom2.exe")
+            with open(exe, "w") as f:
+                f.write("")
+            w = SetupWindow()
+            w.exe_field.setText(exe)
+            w.music_field.setText(os.path.join(tmp, "music"))
+            w.workshop_field.setText("")
+            w._on_launch()
+            self.assertIsNone(w.result_cfg)
+            self.assertIn("Workshop", w.status.text())
 
 
 class TestDialogue(unittest.TestCase):
@@ -1975,6 +2197,180 @@ class TestEngineSpotifyOverride(unittest.TestCase):
         # With the feature off, Spotify covers nothing.
         e.spotify.active = False
         self.assertFalse(e._toggle_keys_with_tracks()["battle"])
+
+
+class TestBootstrapSupportFiles(unittest.TestCase):
+    """The two files written beside the exe when they aren't already there."""
+
+    def _in_temp_dir(self, tmp):
+        """Point bootstrap's data_path at `tmp` for the duration of a test."""
+        original = bootstrap.data_path
+        bootstrap.data_path = lambda *parts: os.path.join(tmp, *parts)
+        self.addCleanup(lambda: setattr(bootstrap, "data_path", original))
+
+    # --- the embedded bodies ---------------------------------------- #
+
+    def test_config_template_is_valid_json(self):
+        """It ships as text to keep the _README formatting, so nothing but a
+        test stops a stray comma making it unloadable."""
+        cfg = json.loads(bootstrap._CONFIG_TEMPLATE)
+        self.assertIsInstance(cfg, dict)
+
+    def test_config_template_has_every_key_the_app_reads(self):
+        cfg = json.loads(bootstrap._CONFIG_TEMPLATE)
+        for key in ("game_exe", "music_folder", "log_path",
+                    "game_config_folder", "workshop_folder",
+                    "addon_test_folder", "mod_config_folder",
+                    "auto_close_with_game", "default_volume", "shuffle",
+                    "crossfade_ms", "radio_chunk_minutes"):
+            self.assertIn(key, cfg)
+
+    def test_batch_file_is_ascii_only(self):
+        """cmd reads a .bat in the console's OEM codepage — a smart quote
+        sneaking in turns to mojibake on somebody else's machine."""
+        bootstrap._CREATE_CONFIG_BAT.encode("ascii")
+
+    # --- writing ----------------------------------------------------- #
+
+    def test_startup_writes_the_rescue_script_but_not_a_config(self):
+        """The regression this shape exists to prevent. A config written at
+        startup looks exactly like one setup already produced, so the wizard
+        would never open again on a fresh install."""
+        with tempfile.TemporaryDirectory() as tmp:
+            self._in_temp_dir(tmp)
+
+            self.assertTrue(bootstrap.ensure_rescue_script())
+
+            self.assertEqual(os.listdir(tmp), [bootstrap.CREATE_CONFIG_NAME])
+            self.assertFalse(
+                os.path.exists(os.path.join(tmp, bootstrap.CONFIG_NAME)))
+
+    def test_written_config_loads_through_the_normal_reader(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._in_temp_dir(tmp)
+            self.assertTrue(bootstrap.write_blank_config())
+
+            path = os.path.join(tmp, bootstrap.CONFIG_NAME)
+            with open(path, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+            self.assertEqual(cfg["game_exe"], "")
+            self.assertTrue(cfg["auto_close_with_game"])
+
+    def test_batch_file_is_written_with_crlf(self):
+        """cmd is unreliable about LF-only scripts, and the failure is a
+        mangled goto rather than anything the user can read."""
+        with tempfile.TemporaryDirectory() as tmp:
+            self._in_temp_dir(tmp)
+            bootstrap.ensure_rescue_script()
+
+            with open(os.path.join(tmp, bootstrap.CREATE_CONFIG_NAME), "rb") as f:
+                raw = f.read()
+            self.assertIn(b"\r\n", raw)
+            self.assertNotIn(b"\n", raw.replace(b"\r\n", b""))
+
+    def test_never_overwrites_an_existing_file(self):
+        """The whole risk of this module. An existing config holds somebody's
+        paths, and replacing it is the most destructive thing it could do."""
+        with tempfile.TemporaryDirectory() as tmp:
+            self._in_temp_dir(tmp)
+            mine = '{"game_exe": "D:/XCOM2.exe"}'
+            with open(os.path.join(tmp, bootstrap.CONFIG_NAME), "w") as f:
+                f.write(mine)
+            with open(os.path.join(tmp, bootstrap.CREATE_CONFIG_NAME), "w") as f:
+                f.write("@echo off\r\nrem mine\r\n")
+
+            self.assertFalse(bootstrap.write_blank_config())
+            self.assertFalse(bootstrap.ensure_rescue_script())
+
+            with open(os.path.join(tmp, bootstrap.CONFIG_NAME)) as f:
+                self.assertEqual(f.read(), mine)
+
+    def test_leaves_no_temp_file_behind(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._in_temp_dir(tmp)
+            bootstrap.ensure_rescue_script()
+            bootstrap.write_blank_config()
+            leftovers = [n for n in os.listdir(tmp) if n.endswith(".tmp")]
+            self.assertEqual(leftovers, [])
+
+    def test_an_unwritable_folder_is_not_fatal(self):
+        """Program Files, or a folder the unzipper left read-only. Neither is
+        a reason for the app not to start."""
+        with tempfile.TemporaryDirectory() as tmp:
+            self._in_temp_dir(os.path.join(tmp, "does", "not", "exist"))
+            self.assertFalse(bootstrap.ensure_rescue_script())
+            self.assertFalse(bootstrap.write_blank_config())
+
+    # --- the wizard net ---------------------------------------------- #
+
+    def _wizard_raising(self, exc):
+        """Make run_setup_gui blow up the way 2.4.2's did."""
+        import setup_gui
+
+        def boom(existing_cfg=None):
+            raise exc
+
+        original = setup_gui.run_setup_gui
+        setup_gui.run_setup_gui = boom
+        self.addCleanup(lambda: setattr(setup_gui, "run_setup_gui", original))
+
+    def test_a_wizard_that_cannot_open_still_yields_a_config(self):
+        """v2.4.2, exactly: AttributeError before the window is drawn. The app
+        has to reach its main window anyway — Options can set every path the
+        wizard would have."""
+        import setup
+        with tempfile.TemporaryDirectory() as tmp:
+            self._in_temp_dir(tmp)
+            original = setup.CONFIG_PATH
+            setup.CONFIG_PATH = os.path.join(tmp, bootstrap.CONFIG_NAME)
+            self.addCleanup(lambda: setattr(setup, "CONFIG_PATH", original))
+            self._wizard_raising(
+                AttributeError("'SetupWindow' object has no attribute '_browse_music'"))
+
+            cfg = bootstrap.run_setup_gui_safely()
+
+            self.assertIsInstance(cfg, dict)
+            self.assertEqual(cfg["game_exe"], "")
+            self.assertTrue(os.path.isfile(setup.CONFIG_PATH))
+
+    def test_a_failed_rerun_keeps_the_config_already_there(self):
+        """--setup on a configured install. Nothing needs writing, and the
+        caller falls back to what it loaded."""
+        with tempfile.TemporaryDirectory() as tmp:
+            self._in_temp_dir(tmp)
+            self._wizard_raising(RuntimeError("no display"))
+
+            self.assertIsNone(
+                bootstrap.run_setup_gui_safely(existing_cfg={"game_exe": "D:/x.exe"}))
+            self.assertFalse(
+                os.path.exists(os.path.join(tmp, bootstrap.CONFIG_NAME)))
+
+    def test_cancelling_is_not_failing(self):
+        """A user who closes the wizard gets None, and no config appears
+        behind their back — otherwise the next launch would skip setup."""
+        import setup_gui
+        with tempfile.TemporaryDirectory() as tmp:
+            self._in_temp_dir(tmp)
+            original = setup_gui.run_setup_gui
+            setup_gui.run_setup_gui = lambda existing_cfg=None: None
+            self.addCleanup(
+                lambda: setattr(setup_gui, "run_setup_gui", original))
+
+            self.assertIsNone(bootstrap.run_setup_gui_safely())
+            self.assertFalse(
+                os.path.exists(os.path.join(tmp, bootstrap.CONFIG_NAME)))
+
+    def test_a_working_wizard_is_passed_straight_through(self):
+        import setup_gui
+        with tempfile.TemporaryDirectory() as tmp:
+            self._in_temp_dir(tmp)
+            wizard_cfg = {"game_exe": "D:/XCom2.exe", "music_folder": "D:/music"}
+            original = setup_gui.run_setup_gui
+            setup_gui.run_setup_gui = lambda existing_cfg=None: wizard_cfg
+            self.addCleanup(
+                lambda: setattr(setup_gui, "run_setup_gui", original))
+
+            self.assertEqual(bootstrap.run_setup_gui_safely(), wizard_cfg)
 
 
 if __name__ == "__main__":

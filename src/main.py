@@ -70,6 +70,15 @@ def main():
 
     _install_crash_handler()
 
+    # The way back in when none of the below works — see bootstrap.py. Only
+    # the batch file: writing a config here would make it look like setup had
+    # already run, and nobody would ever see the wizard again.
+    try:
+        import bootstrap
+        bootstrap.ensure_rescue_script()
+    except Exception:
+        pass
+
     # Says what's actually running, and warns if an update only half landed.
     # Cheap, and it's the first line anyone will want when a build misbehaves.
     try:

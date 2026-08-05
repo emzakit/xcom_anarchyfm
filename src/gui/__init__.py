@@ -15,8 +15,8 @@ def run_gui():
     from PySide6.QtWidgets import QApplication
     from PySide6.QtCore import QTimer
 
+    from bootstrap import run_setup_gui_safely
     from setup import config_exists, load_config
-    from setup_gui import run_setup_gui
     from gui.theme import STYLESHEET
     from gui.log_hooks import install_log_hooks
     from gui.main_window import XiPodWindow
@@ -25,12 +25,15 @@ def run_gui():
 
     force_setup = "--setup" in sys.argv
 
+    # Via bootstrap, not straight to run_setup_gui: the wizard is the only
+    # window that draws before the main one, so an exception in it has nothing
+    # to land on and takes the app down with no window ever appearing.
     if force_setup and config_exists():
-        cfg = run_setup_gui(existing_cfg=load_config())
+        cfg = run_setup_gui_safely(existing_cfg=load_config())
         if cfg is None:
             cfg = load_config()
     elif not config_exists():
-        cfg = run_setup_gui()
+        cfg = run_setup_gui_safely()
         if cfg is None:
             print("Setup cancelled. Can't run without a config, Commander.")
             return

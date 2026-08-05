@@ -6,8 +6,8 @@ import sys
 
 from audio_engine import XiPodEngine
 from log_watcher import Bridge
+from bootstrap import run_setup_gui_safely
 from setup import config_exists, load_config, discover_addons
-from setup_gui import run_setup_gui
 import console
 import process_utils
 
@@ -19,7 +19,7 @@ def main_cli():
 
     if force_setup and config_exists():
         console.shen("Re-opening setup wizard...")
-        cfg = run_setup_gui(existing_cfg=load_config())
+        cfg = run_setup_gui_safely(existing_cfg=load_config())
         if cfg is None:
             console.shen("Setup cancelled — using existing config.")
             cfg = load_config()
@@ -27,7 +27,7 @@ def main_cli():
             console.shen("Config updated.")
     elif not config_exists():
         console.shen("No config found — opening setup wizard...")
-        cfg = run_setup_gui()
+        cfg = run_setup_gui_safely()
         if cfg is None:
             console.shen("Setup cancelled. Can't run without a config, Commander.")
             return

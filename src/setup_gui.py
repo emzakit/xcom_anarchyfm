@@ -61,6 +61,13 @@ class SetupWindow(QWidget):
         self.resize(640, 880)
         self.result_cfg = None  # set on success
 
+        # Kept so _on_launch can write back onto it rather than building a
+        # fresh dict. The wizard asks about six paths; the config holds a good
+        # deal more than that — Spotify credentials, the addon enable map,
+        # volume and crossfade — and re-running setup on an existing install
+        # must not be a way to lose any of it.
+        self._existing_cfg = dict(existing_cfg or {})
+
         root = QVBoxLayout(self)
         root.setContentsMargins(24, 18, 24, 18)
         root.setSpacing(0)
@@ -404,6 +411,33 @@ class SetupWindow(QWidget):
             self._autofill_from_exe()
             self._refresh_flush_button()
 
+    def _browse_music(self, field):
+        path = QFileDialog.getExistingDirectory(self, "Select Music Library Folder")
+        if path:
+            field.setText(os.path.normpath(path))
+
+    def _browse_workshop(self, field):
+        path = QFileDialog.getExistingDirectory(self, "Select Workshop Folder")
+        if path:
+            field.setText(os.path.normpath(path))
+
+    def _browse_config(self, field):
+        path = QFileDialog.getExistingDirectory(self, "Select Game Config Folder")
+        if path:
+            field.setText(os.path.normpath(path))
+
+    def _browse_addon_test(self, field):
+        path = QFileDialog.getExistingDirectory(self, "Select Addon Testing Folder")
+        if path:
+            field.setText(os.path.normpath(path))
+
+    def _open_music_folder(self):
+        path = self.music_field.text().strip()
+        if path and os.path.isdir(path):
+            subprocess.Popen(["explorer", os.path.normpath(path)])
+        else:
+            self._flash("SHEN:  Pick a music folder first, Commander.")
+
     def _refresh_flush_button(self):
         """Show the -forcelogflush button only when it has something to do.
 
@@ -501,6 +535,181 @@ class SetupWindow(QWidget):
         webbrowser.open(AML_RELEASES_URL)
         self._flash("SHEN:  Grab the latest .zip, unpack it, then point Step 1 "
                     "at XCOM2 Launcher.exe.")
+
+    # ------------------------------------------------------------ #
+    #  Launch / Validate
+    # ------------------------------------------------------------ #
+
+    def _on_launch(self):
+        game_exe = self.exe_field.text().strip()
+        music_folder = self.music_field.text().strip()
+        workshop_folder = self.workshop_field.text().strip()
+        game_config_folder = self.config_field.text().strip()
+        addon_test_folder = self.addon_test_field.text().strip()
+
+        if not game_exe:
+            self._flash("SHEN:  I need a game executable, Commander.")
+            return
+        if not os.path.isfile(game_exe):
+            self._flash(f"SHEN:  Can't find that file:  {game_exe}")
+            return
+        if not music_folder:
+            self._flash("SHEN:  I need a music library folder, Commander.")
+            return
+
+        if not os.path.isdir(music_folder):
+            try:
+                os.makedirs(music_folder)
+            except Exception as e:
+                self._flash(f"SHEN:  Couldn't create folder:  {e}")
+                return
+
+        _create_state_folders(music_folder)
+
+        # Optional, so an empty box just means "not a pack author" — but if a
+        # path is set, make it real and drop the explainer in it.
+        if addon_test_folder:
+            create_addon_test_folder(addon_test_folder)
+
+        # Workshop is required: it's how we reach the installed mod's own
+        # Config folder, which is the only place MMS reads our silencing from.
+        # Get this wrong and everything appears to work while the game's music
+        # plays straight over the top.
+        if not workshop_folder:
+            workshop_folder = find_workshop_folder(game_exe)
+            if workshop_folder:
+                self.workshop_field.setText(os.path.normpath(workshop_folder))
+
+        if not workshop_folder:
+            self._flash("SHEN:  I need the Workshop folder — it's how I find the "
+                        "installed mod. Without it the game's music won't be silenced.")
+            return
+        if not os.path.isdir(workshop_folder):
+            self._flash(f"SHEN:  Workshop folder not found:  {workshop_folder}")
+            return
+
+        # The folder existing isn't the point — reaching our own mod through
+        # it is. Warn rather than block: a first-time setup can legitimately
+        # run before the mod has finished downloading.
+        if not mms_packs.find_own_config_dirs(workshop_folder):
+            self._flash("SHEN:  Found the folder, but not the Anarchy Radio FM mod "
+                        "inside it. Subscribe to the mod (or set mod_config_folder) "
+                        "or the game's music will play over yours.")
+
+        # Answered by the Logs FOLDER existing, not the log file — the folder
+        # ships with the game, the file only appears once it has run. Asking
+        # only happens when neither is there.
+        log_path = find_log_path_silent()
+        if not log_path:
+            log_path = self._ask_log_path()
+            if not log_path:
+                return
+
+        if not game_config_folder:
+            game_config_folder = _find_game_config_folder(log_path) or ""
+        if not game_config_folder and log_path:
+            # Same folder as the log, one level up and along: Logs/Launch.log
+            # becomes Config. Derived rather than hardcoded under Documents,
+            # because OneDrive moves Documents on a great many machines.
+            game_config_folder = os.path.join(
+                os.path.dirname(os.path.dirname(log_path)), "Config")
+
+        # Written onto the existing config, not in place of it. Everything the
+        # wizard didn't ask about — Spotify, the addon enable map, volume,
+        # crossfade — belongs to the user and survives a re-run untouched.
+        cfg = dict(self._existing_cfg)
+        cfg.update({
+            "game_exe": game_exe,
+            "music_folder": music_folder,
+            "log_path": log_path,
+            "game_config_folder": game_config_folder,
+            "workshop_folder": workshop_folder,
+            "addon_test_folder": addon_test_folder,
+            "radio_chunk_minutes": int(self.chunk_spin.value()),
+        })
+        # First run only. setdefault, so a returning user's own numbers stand.
+        for key, fallback in (("auto_close_with_game", True),
+                              ("default_volume", 0.8),
+                              ("shuffle", True),
+                              ("crossfade_ms", 2500)):
+            cfg.setdefault(key, fallback)
+
+        save_config(cfg)
+
+        # Music addons aren't imported here any more — they're discovered and
+        # merged when the engine loads the library. See addons.py.
+        self.result_cfg = cfg
+        self.close()
+
+    def _explain_radio_length(self):
+        """The long version, on demand. It was inline once and dominated the
+        whole wizard — most people just want to accept the default."""
+        box = QMessageBox(self)
+        box.setWindowTitle("Radio Mode station length")
+        box.setIcon(QMessageBox.NoIcon)
+        box.setText("Why we're asking")
+        box.setInformativeText(
+            "Radio Mode tunes the Avenger to your STATE_RESISTANCE_RADIO folder "
+            "and starts every track at a random point, like catching a broadcast "
+            "that was already running.\n\n"
+            "People tend to fill that folder with hour-long station rips. Loading "
+            "a whole hour costs a few hundred MB of memory and leaves you staring "
+            "at silence for ten seconds before the first note.\n\n"
+            "So it loads a slice at a time. When the slice ends, it re-tunes to a "
+            "fresh random spot — which is what a radio station does anyway.\n\n"
+            "10 minutes gets you playing in about two seconds. Set it to 0 to "
+            "switch the limit off and play every track through to its end.\n\n"
+            "You can change this any time in Options."
+        )
+        box.setStyleSheet(self.styleSheet())
+        box.exec()
+
+    def _ask_log_path(self):
+        """Last resort when the Logs folder can't be found. Returns a path, or
+        "" if the user closed the dialog without choosing.
+
+        Asks for the FOLDER, not Launch.log. The file doesn't exist until the
+        game has run once, so a file picker on a fresh install shows an empty
+        directory and no way to proceed — which is precisely the situation
+        this dialog exists to get someone out of. log_path_from_folder still
+        accepts the file itself, for anyone who browses to it out of habit.
+        """
+        msg = QMessageBox(self)
+        msg.setWindowTitle("XCOM 2 Log Folder")
+        msg.setStyleSheet(STYLESHEET)
+        msg.setText(
+            "Couldn't find your XCOM 2 Logs folder.\n\n"
+            "It's created when XCOM 2 is installed, and the log inside it "
+            "appears the first time the game runs. Launch the game once, then "
+            "click Retry.\n\n"
+            "Or click Browse to point me at it:\n"
+            "%USERPROFILE%\\Documents\\my games\\"
+            "XCOM2 War of the Chosen\\XComGame\\Logs"
+        )
+        retry_btn = msg.addButton("Retry Auto-Detect", QMessageBox.AcceptRole)
+        browse_btn = msg.addButton("Browse...", QMessageBox.ActionRole)
+        msg.addButton("Use Default Path", QMessageBox.RejectRole)
+        msg.exec()
+
+        clicked = msg.clickedButton()
+
+        if clicked == retry_btn:
+            path = find_log_path_silent()
+            if path:
+                return path
+            self._flash("SHEN:  Still not there. Launch XCOM 2 once first.")
+            return ""
+
+        if clicked == browse_btn:
+            folder = QFileDialog.getExistingDirectory(self, "Select the XCOM 2 Logs folder")
+            if folder:
+                return log_path_from_folder(os.path.normpath(folder))
+            return ""
+
+        # The best guess, whether or not it's there yet — the app copes with a
+        # log that hasn't appeared, and says so rather than failing.
+        candidates = log_folder_candidates()
+        return log_path_from_folder(candidates[0]) if candidates else ""
 
     def _flash(self, msg):
         self.status.setText(msg)

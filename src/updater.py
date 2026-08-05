@@ -442,7 +442,12 @@ if exist "%DST%\\{current_exe}" (
     move "%DST%\\{current_exe}" "%BAK%\\{current_exe}" >> "%LOG%" 2>&1
     if errorlevel 1 goto revert
 )
-if exist "%DST%\\build.json" copy /Y "%DST%\\build.json" "%BAK%\\" >nul 2>&1
+
+rem build.json travels inside _internal, which the move above already took
+rem with it, so the backup gets the outgoing version's manifest for free. A
+rem root copy is only there on installs predating 2.4.3; take it along too,
+rem and clear it out of the install so the new layout is the only one left.
+if exist "%DST%\\build.json" move /Y "%DST%\\build.json" "%BAK%\\" >nul 2>&1
 
 rem Self-documenting, so the folder still makes sense in six months.
 > "%BAK%\\HOW_TO_REVERT.txt" echo Anarchy Radio FM {old_version}
@@ -585,6 +590,9 @@ def report_install():
 
     try:
         install_dir = os.path.dirname(sys.executable)
+        # An update applied by a pre-2.4.3 helper leaves the old root manifest
+        # sitting beside the exe. Harmless, but it's the copy people can see.
+        build_manifest.prune_legacy_manifest(install_dir)
         recorded = build_manifest.installed_version(install_dir)
     except Exception:
         return

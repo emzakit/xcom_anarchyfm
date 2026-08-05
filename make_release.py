@@ -46,10 +46,44 @@ EXE_NAME = "AnarchyRadioFM.exe"
 # the real exe already has.
 EXTRA_FILES = ["update_manually.bat"]
 
+# The wiki is a separate repo cloned alongside this one. Its changelog ships in
+# the build so "what changed?" is answerable from the install folder itself,
+# without a browser — which is the state anyone is in when an update has just
+# landed and something looks different.
+WIKI_DIR = os.path.join(os.path.dirname(ROOT), "xcom_anarchyfm.wiki")
+WIKI_FILES = ["Changelog.md"]
+
 
 def release_name(ver):
     """The folder and the zip share this name. The exe inside does not."""
     return f"AnarchyRadioFM_APP_v{ver}"
+
+
+def _write_generated(release_dir):
+    """Files that ship in the build but have no copy in the repo to copy from.
+
+    So far just create_config.bat — the manual way to write xipod_config.json
+    when the app won't open. The app writes it beside itself on every start,
+    which covers an install that breaks later, but not the case it most needs
+    to cover: a fresh unzip that never starts at all. So it has to be in the
+    zip too.
+
+    Generated from src/bootstrap.py rather than copied from a file beside this
+    script, because a second copy in the repo is a second source of truth and
+    would drift from the one the app writes the first time either changed.
+    """
+    import bootstrap
+
+    original = bootstrap.data_path
+    bootstrap.data_path = lambda *parts: os.path.join(release_dir, *parts)
+    try:
+        written = bootstrap.ensure_rescue_script()
+    finally:
+        bootstrap.data_path = original
+
+    if not written:
+        sys.exit(f"Couldn't write {bootstrap.CREATE_CONFIG_NAME} into the build.")
+    print(f"  + {bootstrap.CREATE_CONFIG_NAME}  (generated from src/bootstrap.py)")
 
 
 # Anything here means the app was RUN from the build folder and left its
@@ -57,7 +91,8 @@ def release_name(ver):
 # scrub below a release would ship the developer's own config, their music
 # tree, and whatever packs they were testing.
 _LEAKS = ("xipod_config.json", "xipod_presets.json", ".spotify_cache.json",
-          "music", "addon_test", "addon_projects", "build.json")
+          "music", "addon_test", "addon_projects", "build.json",
+          "create_config.bat", os.path.join("_internal", "build.json"))
 
 
 def _run(cmd):
@@ -161,6 +196,17 @@ def main():
             sys.exit(f"Missing {extra} — it ships inside the build.")
         shutil.copy2(source, os.path.join(release_dir, extra))
         print(f"  + {extra}")
+
+    for extra in WIKI_FILES:
+        source = os.path.join(WIKI_DIR, extra)
+        if not os.path.isfile(source):
+            sys.exit(f"Missing {source}\n\nThe wiki is a separate repo and has "
+                     f"to be cloned alongside this one at {WIKI_DIR} — see "
+                     ".claude/claude_release_checklist.md.")
+        shutil.copy2(source, os.path.join(release_dir, extra))
+        print(f"  + {extra}  (from the wiki repo)")
+
+    _write_generated(release_dir)
 
     built_at = datetime.datetime.now(datetime.timezone.utc).strftime(
         "%Y-%m-%dT%H:%M:%SZ")

@@ -24,11 +24,41 @@ import os
 
 MANIFEST_NAME = "build.json"
 
+# Inside _internal, not beside the exe. It's proof of what the build contains,
+# not something anyone is meant to open — and a stray .json sitting next to the
+# exe reads as clutter, which is an invitation to delete it. Deleting it costs
+# the user the download verification on their next update and the half-applied-
+# update warning, silently, and neither failure points back at the file they
+# removed. _internal is PyInstaller's own folder and already understood to be
+# off limits.
+_INTERNAL_DIR = "_internal"
+
+# Relative to the build root, forward-slashed to match _walk's keys.
+MANIFEST_REL = f"{_INTERNAL_DIR}/{MANIFEST_NAME}"
+
+# Where every build up to 2.4.2 put it. Still read, so an install from before
+# the move can still report its own version and still be verified.
+LEGACY_MANIFEST_REL = MANIFEST_NAME
+
 # Written by the app after install, so they're absent from a fresh build and
 # must never count as corruption. Same list the updater refuses to overwrite.
 _USER_FILES = {"xipod_config.json", "xipod_presets.json", ".spotify_cache.json"}
 
 _CHUNK = 1024 * 1024
+
+
+def manifest_path(build_dir, for_write=False):
+    """Where this build's manifest is, or should go.
+
+    Writing always targets _internal. Reading prefers it but falls back to the
+    old location, so an install that predates the move still works — including
+    one being read by a newer app during an update.
+    """
+    modern = os.path.join(build_dir, _INTERNAL_DIR, MANIFEST_NAME)
+    if for_write or os.path.isfile(modern):
+        return modern
+    legacy = os.path.join(build_dir, MANIFEST_NAME)
+    return legacy if os.path.isfile(legacy) else modern
 
 
 def sha256(path):
@@ -52,7 +82,11 @@ def _walk(build_dir):
         for name in files:
             full = os.path.join(root, name)
             rel = os.path.relpath(full, build_dir).replace(os.sep, "/")
-            if rel == MANIFEST_NAME or os.path.basename(rel) in _USER_FILES:
+            # Both locations: a build folder can hold a stale root manifest if
+            # it was updated in place from a version before the move.
+            if rel in (MANIFEST_REL, LEGACY_MANIFEST_REL):
+                continue
+            if os.path.basename(rel) in _USER_FILES:
                 continue
             yield rel, full
 
@@ -71,12 +105,34 @@ def build(build_dir, app_version, built_at=None):
 
 
 def write(build_dir, app_version, built_at=None):
-    """Write build.json into the root of a finished build. Returns its path."""
+    """Write build.json into a finished build. Returns its path."""
     manifest = build(build_dir, app_version, built_at)
-    path = os.path.join(build_dir, MANIFEST_NAME)
+    path = manifest_path(build_dir, for_write=True)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2)
     return path
+
+
+def prune_legacy_manifest(install_dir):
+    """Delete a root build.json that _internal's copy has superseded.
+
+    Updating in place from 2.4.2 or earlier leaves the old one behind: the
+    update copies files in without mirroring, deliberately — mirroring would
+    take the user's config and music with it — so nothing removes what the new
+    build doesn't replace. Left alone that's two manifests in one install, the
+    stale one in the place people look. Only ever removes it when the real one
+    is present to supersede it. Never raises.
+    """
+    modern = os.path.join(install_dir, _INTERNAL_DIR, MANIFEST_NAME)
+    legacy = os.path.join(install_dir, MANIFEST_NAME)
+    if not (os.path.isfile(modern) and os.path.isfile(legacy)):
+        return False
+    try:
+        os.remove(legacy)
+    except OSError:
+        return False
+    return True
 
 
 def read(build_dir):
@@ -85,7 +141,7 @@ def read(build_dir):
     Never raises. A build without a manifest is a build from before this
     existed, and must keep working exactly as it did.
     """
-    path = os.path.join(build_dir, MANIFEST_NAME)
+    path = manifest_path(build_dir)
     if not os.path.isfile(path):
         return None
     try:
